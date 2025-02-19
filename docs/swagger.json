@@ -1,0 +1,230 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A self-hosted voice-to-text transcription service using Whisper AI.",
+        "title": "Whisper API Service",
+        "contact": {},
+        "version": "1.1"
+    },
+    "host": "api.openradiomap.com",
+    "basePath": "/",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Get API health status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/transcribe": {
+            "post": {
+                "description": "Convert audio file to text using Whisper AI",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transcription"
+                ],
+                "summary": "Transcribe audio to text",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Audio file to transcribe (WAV or OGG format)",
+                        "name": "audio",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.TranscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.AudioMetadata": {
+            "type": "object",
+            "properties": {
+                "bit_depth": {
+                    "type": "integer"
+                },
+                "bitrate_kbps": {
+                    "type": "integer"
+                },
+                "channels": {
+                    "type": "integer"
+                },
+                "codec": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "number"
+                },
+                "format": {
+                    "type": "string"
+                },
+                "original_size_bytes": {
+                    "type": "integer"
+                },
+                "sample_rate": {
+                    "type": "integer"
+                }
+            }
+        },
+        "main.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.MemStats": {
+            "type": "object",
+            "properties": {
+                "allocated_mb": {
+                    "type": "number"
+                },
+                "gc_cycles": {
+                    "type": "integer"
+                },
+                "gc_pause_micros": {
+                    "type": "integer"
+                },
+                "heap_in_use_mb": {
+                    "type": "number"
+                },
+                "stack_in_use_mb": {
+                    "type": "number"
+                },
+                "system_mb": {
+                    "type": "number"
+                },
+                "total_alloc_mb": {
+                    "type": "number"
+                }
+            }
+        },
+        "main.SegmentInfo": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "number"
+                },
+                "start_time": {
+                    "type": "number"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.TokenInfo"
+                    }
+                }
+            }
+        },
+        "main.TokenInfo": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "number"
+                },
+                "probability": {
+                    "type": "number"
+                },
+                "start_time": {
+                    "type": "number"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.TranscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "audio_info": {
+                    "$ref": "#/definitions/main.AudioMetadata"
+                },
+                "compute_time": {
+                    "type": "object",
+                    "properties": {
+                        "cpu_time_seconds": {
+                            "type": "number"
+                        },
+                        "gpu_time_seconds": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "duration_seconds": {
+                    "type": "number"
+                },
+                "memory_usage": {
+                    "$ref": "#/definitions/main.MemStats"
+                },
+                "processing_time_seconds": {
+                    "type": "number"
+                },
+                "segments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.SegmentInfo"
+                    }
+                },
+                "text": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

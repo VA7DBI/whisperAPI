@@ -1,0 +1,184 @@
+basePath: /
+definitions:
+  main.AudioMetadata:
+    properties:
+      bit_depth:
+        type: integer
+      bitrate_kbps:
+        type: integer
+      channels:
+        type: integer
+      codec:
+        type: string
+      duration_seconds:
+        type: number
+      format:
+        type: string
+      original_size_bytes:
+        type: integer
+      sample_rate:
+        type: integer
+    type: object
+  main.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  main.HealthResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  main.MemStats:
+    properties:
+      allocated_mb:
+        type: number
+      gc_cycles:
+        type: integer
+      gc_pause_micros:
+        type: integer
+      heap_in_use_mb:
+        type: number
+      stack_in_use_mb:
+        type: number
+      system_mb:
+        type: number
+      total_alloc_mb:
+        type: number
+    type: object
+  main.SegmentInfo:
+    properties:
+      end_time:
+        type: number
+      start_time:
+        type: number
+      text:
+        type: string
+      tokens:
+        items:
+          $ref: '#/definitions/main.TokenInfo'
+        type: array
+    type: object
+  main.TokenInfo:
+    properties:
+      end_time:
+        type: number
+      probability:
+        type: number
+      start_time:
+        type: number
+      text:
+        type: string
+    type: object
+  main.TranscriptionResponse:
+    properties:
+      audio_info:
+        $ref: '#/definitions/main.AudioMetadata'
+      compute_time:
+        properties:
+          cpu_time_seconds:
+            type: number
+          gpu_time_seconds:
+            type: number
+        type: object
+      confidence:
+        type: number
+      duration_seconds:
+        type: number
+      memory_usage:
+        $ref: '#/definitions/main.MemStats'
+      processing_time_seconds:
+        type: number
+      segments:
+        items:
+          $ref: '#/definitions/main.SegmentInfo'
+        type: array
+      text:
+        type: string
+      timestamp:
+        type: string
+    type: object
+host: api.openradiomap.com
+info:
+  contact: {}
+  description: A self-hosted voice-to-text transcription service using Whisper AI.
+  title: Whisper API Service
+  version: "1.1"
+paths:
+  /health:
+    get:
+      description: Get API health status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.HealthResponse'
+      summary: Health check endpoint
+      tags:
+      - health
+  /transcribe:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Convert audio file to text using Whisper AI
+      parameters:
+      - description: Audio file to transcribe (WAV or OGG format)
+        in: formData
+        name: audio
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.TranscriptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authorization header required"
+        '403':
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid token"
+      summary: Transcribe audio to text
+      tags:
+      - transcription
+      security:
+        - BearerAuth: []
+swagger: "2.0"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer token authentication. Tokens can be managed in PostgreSQL or configured as static tokens.
+        Token validation uses a multi-layer approach:
+        1. Redis cache (if enabled)
+        2. PostgreSQL database (if enabled)
+        3. Static tokens (from config)

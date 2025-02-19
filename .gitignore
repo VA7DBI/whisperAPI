@@ -7,9 +7,16 @@
 *.dll
 *.so
 *.dylib
+whisperAPI
+
+#AI models
+models/ggml-base.bin
 
 # Test binary, built with `go test -c`
 *.test
+test_fixtures/test.ogg
+test_fixtures/test.wav
+
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -23,3 +30,4 @@ go.work.sum
 
 # env file
 .env
+

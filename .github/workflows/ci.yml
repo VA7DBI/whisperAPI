@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: whisperapi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+
+    - name: Install FFmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+    - name: Download Whisper Model
+      run: |
+        mkdir -p models
+        curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -o models/ggml-base.bin
+
+    - name: Initialize Test Database
+      run: |
+        PGPASSWORD=postgres psql -h localhost -U postgres -d whisperapi_test -f scripts/schema.sql
+
+    - name: Run Tests
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      env:
+        TEST_REDIS_HOST: localhost
+        TEST_REDIS_PORT: 6379
+        TEST_POSTGRES_HOST: localhost
+        TEST_POSTGRES_PORT: 5432
+        TEST_POSTGRES_USER: postgres
+        TEST_POSTGRES_PASSWORD: postgres
+        TEST_POSTGRES_DB: whisperapi_test
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.txt
+        fail_ci_if_error: true
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest

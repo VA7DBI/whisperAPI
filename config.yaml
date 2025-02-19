@@ -1,0 +1,41 @@
+server:
+  host: localhost
+  port: 8080
+
+api:
+  base_path: /
+  swagger_host: locahost
+
+whisper:
+  model_path: models/ggml-base.bin
+  language: en
+
+audio:
+  sample_rate: 16000
+  max_duration_seconds: 300
+  max_file_size_mb: 25
+
+metrics:
+  enabled: true
+  path: /metrics
+
+auth:
+  enabled: false  # Set to true to enable authentication
+  tokens:         # List of valid bearer tokens
+    - "your-secret-token-1"
+  redis:
+    enabled: true
+    host: "redis-01"
+    port: 6379
+    db: 0
+    password: ""
+    key_ttl: 3600  # 1 hour
+  postgres:
+    enabled: true
+    host: "pg17-01"
+    port: 5432
+    user: "postgres"
+    password: "secret"
+    dbname: "whisperapi"
+    table: "api_tokens"
+    query: "SELECT EXISTS(SELECT 1 FROM api_tokens WHERE token = $1 AND valid_until > NOW())"
