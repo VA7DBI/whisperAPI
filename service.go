@@ -16,6 +16,7 @@ import (
 
 	"syscall"
 
+	"github.com/VA7DBI/whisperAPI/audio"
 	"github.com/VA7DBI/whisperAPI/config"
 	"github.com/VA7DBI/whisperAPI/metrics"
 	"github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
@@ -52,27 +53,15 @@ type SegmentInfo struct {
 	EndTime   float64     `json:"end_time"`
 }
 
-// Add new types for audio metadata
-type AudioMetadata struct {
-	Format       string  `json:"format"`
-	Codec        string  `json:"codec"`
-	SampleRate   int     `json:"sample_rate"`
-	Channels     int     `json:"channels"`
-	BitDepth     int     `json:"bit_depth"`
-	Duration     float64 `json:"duration_seconds"`
-	OriginalSize int64   `json:"original_size_bytes"`
-	Bitrate      int     `json:"bitrate_kbps,omitempty"`
-}
-
 type TranscriptionResponse struct {
-	Text           string        `json:"text"`
-	Segments       []SegmentInfo `json:"segments"`
-	Duration       float64       `json:"duration_seconds"`
-	ProcessingTime float64       `json:"processing_time_seconds"`
-	Confidence     float64       `json:"confidence"`
-	MemoryUsage    MemStats      `json:"memory_usage"`
-	AudioInfo      AudioMetadata `json:"audio_info"`
-	Timestamp      time.Time     `json:"timestamp"`
+	Text           string              `json:"text"`
+	Segments       []SegmentInfo       `json:"segments"`
+	Duration       float64             `json:"duration_seconds"`
+	ProcessingTime float64             `json:"processing_time_seconds"`
+	Confidence     float64             `json:"confidence"`
+	MemoryUsage    MemStats            `json:"memory_usage"`
+	AudioInfo      audio.AudioMetadata `json:"audio_info"` // Updated to use audio package type
+	Timestamp      time.Time           `json:"timestamp"`
 	ComputeTime    struct {
 		CPUTime float64 `json:"cpu_time_seconds"`
 		GPUTime float64 `json:"gpu_time_seconds,omitempty"`
@@ -308,7 +297,7 @@ func (s *TranscriptionService) handleError(c *gin.Context, format, status string
 	c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 }
 
-// Add helper function to convert audio file to samples
+// Update convertAudioToSamples to use the new format handlers
 func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -317,9 +306,11 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 	defer file.Close()
 
 	ext := strings.ToLower(filepath.Ext(filename))
+	var format audio.Format
+
 	switch ext {
 	case ".wav":
-		return s.convertWavToSamples(file)
+		format = &audio.WAVFormat{}
 	case ".ogg":
 		// Detect codec first
 		codec, err := detectOggCodec(file)
@@ -334,17 +325,65 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 
 		switch codec {
 		case "Vorbis":
-			return s.convertOggVorbisToSamples(file)
+			format = &audio.VorbisFormat{}
 		case "Opus":
-			return s.convertOpusToSamples(file)
+			format = &audio.OpusFormat{}
 		default:
 			return nil, fmt.Errorf("unsupported OGG codec: %s", codec)
 		}
 	case ".opus":
-		return s.convertOpusToSamples(file)
+		format = &audio.OpusFormat{}
 	default:
 		return nil, fmt.Errorf("unsupported audio format: %s", ext)
 	}
+
+	return format.ConvertToSamples(filename, s.config.Audio.SampleRate)
+}
+
+// Update getAudioMetadata to use the new format handlers
+func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMetadata, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return audio.AudioMetadata{}, err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return audio.AudioMetadata{}, err
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	var format audio.Format
+
+	switch ext {
+	case ".wav":
+		format = &audio.WAVFormat{}
+	case ".ogg":
+		codec, err := detectOggCodec(file)
+		if err != nil {
+			return audio.AudioMetadata{}, fmt.Errorf("failed to detect OGG codec: %v", err)
+		}
+
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return audio.AudioMetadata{}, err
+		}
+
+		switch codec {
+		case "Vorbis":
+			format = &audio.VorbisFormat{}
+		case "Opus":
+			format = &audio.OpusFormat{}
+		default:
+			return audio.AudioMetadata{}, fmt.Errorf("unsupported OGG codec: %s", codec)
+		}
+	case ".opus":
+		format = &audio.OpusFormat{}
+	default:
+		return audio.AudioMetadata{}, fmt.Errorf("unsupported format: %s", ext)
+	}
+
+	return format.GetMetadata(filename, fileInfo.Size())
 }
 
 // Update magic headers with more precise patterns
@@ -659,138 +698,4 @@ func resampleAudio(samples []float32, srcRate, dstRate int) []float32 {
 // Helper function to convert time.Duration to seconds
 func durationToSeconds(d time.Duration) float64 {
 	return float64(d.Nanoseconds()) / float64(NanosecondsPerSecond)
-}
-
-func (s *TranscriptionService) getAudioMetadata(filename string) (AudioMetadata, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".wav":
-		return s.getWavMetadata(file, fileInfo.Size())
-	case ".ogg":
-		// Detect codec first
-		codec, err := detectOggCodec(file)
-		if err != nil {
-			return AudioMetadata{}, fmt.Errorf("failed to detect OGG codec: %v", err)
-		}
-
-		// Reset file position
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			return AudioMetadata{}, err
-		}
-
-		switch codec {
-		case "Vorbis":
-			metadata, err := s.getOggVorbisMetadata(file, fileInfo.Size())
-			metadata.Format = "OGG" // Container format
-			return metadata, err
-		case "Opus":
-			metadata, err := s.getOpusMetadata(file, fileInfo.Size())
-			metadata.Format = "OGG" // Container format
-			return metadata, err
-		default:
-			return AudioMetadata{}, fmt.Errorf("unsupported OGG codec: %s", codec)
-		}
-	case ".opus":
-		return s.getOpusMetadata(file, fileInfo.Size())
-	default:
-		return AudioMetadata{}, fmt.Errorf("unsupported format: %s", ext)
-	}
-}
-
-// Rename existing getOggMetadata to getOggVorbisMetadata
-func (s *TranscriptionService) getOggVorbisMetadata(file *os.File, size int64) (AudioMetadata, error) {
-	decoder, err := oggvorbis.NewReader(file)
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-
-	// Get duration by seeking to end
-	currentPos, err := file.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-
-	maxPos, err := file.Seek(0, io.SeekEnd)
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-
-	_, err = file.Seek(currentPos, io.SeekStart)
-	if err != nil {
-		return AudioMetadata{}, err
-	}
-
-	duration := float64(maxPos) / float64(decoder.SampleRate()*decoder.Channels()*2)
-
-	return AudioMetadata{
-		Format:       "OGG",
-		Codec:        "Vorbis",
-		SampleRate:   decoder.SampleRate(),
-		Channels:     decoder.Channels(),
-		BitDepth:     16, // Vorbis typically uses 16-bit samples
-		Duration:     duration,
-		OriginalSize: size,
-		Bitrate:      int(float64(size*8) / duration / 1000),
-	}, nil
-}
-
-func (s *TranscriptionService) getWavMetadata(file *os.File, size int64) (AudioMetadata, error) {
-	decoder := wav.NewDecoder(file)
-	if !decoder.IsValidFile() {
-		return AudioMetadata{}, fmt.Errorf("invalid WAV file")
-	}
-
-	format := decoder.Format()
-	dur, err := decoder.Duration()
-	if err != nil {
-		return AudioMetadata{}, fmt.Errorf("failed to get duration: %v", err)
-	}
-
-	// Calculate bitrate from file size and duration
-	bitrate := int(float64(size*8) / dur.Seconds() / 1000)
-
-	return AudioMetadata{
-		Format:       "WAV",
-		Codec:        "PCM", // WAV files we handle are PCM
-		SampleRate:   format.SampleRate,
-		Channels:     format.NumChannels,
-		BitDepth:     16, // Standard for our use case
-		Duration:     dur.Seconds(),
-		OriginalSize: size,
-		Bitrate:      bitrate,
-	}, nil
-}
-
-func (s *TranscriptionService) getOpusMetadata(file *os.File, size int64) (AudioMetadata, error) {
-	// Standard Opus parameters
-	sampleRate := 48000  // Opus default
-	channels := 1        // We decode as mono
-	frameSize := 960     // Standard Opus frame size for 20ms
-	bytesPerFrame := 120 // Typical Opus frame size in bytes
-
-	// Calculate approximate duration
-	frameCount := size / int64(bytesPerFrame)
-	duration := float64(frameCount) * float64(frameSize) / float64(sampleRate)
-
-	return AudioMetadata{
-		Format:       "OPUS",
-		Codec:        "Opus",
-		SampleRate:   sampleRate,
-		Channels:     channels,
-		BitDepth:     16, // Opus uses 16-bit samples internally
-		Duration:     duration,
-		OriginalSize: size,
-		Bitrate:      int(float64(size*8) / duration / 1000),
-	}, nil
 }
