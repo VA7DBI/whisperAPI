@@ -1,0 +1,3 @@
+#!/bin/sh
+
+python3 ./makewave.py "Every single day is a new chance. A new opportunity. A fresh start. No matter what happened yesterday, today is yours to shape. Success isn’t about being the strongest or the smartest—it’s about showing up, putting in the effort, and refusing to quit. You are capable of more than you think. Challenges? They’re just stepping stones. Failures? They’re lessons in disguise. Every setback is setting you up for a comeback. So stand tall. Take that first step. Push through the doubt, the fear, the excuses. Because your goals, your dreams, your potential—they’re all waiting for you. The only question is—are you ready to go get them?"
