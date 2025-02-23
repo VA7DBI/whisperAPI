@@ -9,7 +9,7 @@ const (
 	NanosecondsPerSecond = 1_000_000_000
 )
 
-// AudioMetadata contains information about an audio file
+// AudioMetadata contains information about an audio file.
 type AudioMetadata struct {
 	Format       string  `json:"format"`
 	Codec        string  `json:"codec"`
@@ -21,13 +21,13 @@ type AudioMetadata struct {
 	Bitrate      int     `json:"bitrate_kbps,omitempty"`
 }
 
-// Format represents an audio format handler
+// Format defines the interface for audio format handlers.
 type Format interface {
 	GetMetadata(filename string, fileSize int64) (AudioMetadata, error)
 	ConvertToSamples(filename string, targetSampleRate int) ([]float32, error)
 }
 
-// Helper function to convert audio samples to mono
+// ConvertToMono converts stereo audio samples to mono.
 func ConvertToMono(samples []float32, channels int) []float32 {
 	monoSamples := make([]float32, len(samples)/channels)
 	for i := 0; i < len(monoSamples); i++ {
@@ -40,7 +40,8 @@ func ConvertToMono(samples []float32, channels int) []float32 {
 	return monoSamples
 }
 
-// Simple linear resampling - for production, consider using a better resampling algorithm
+// ResampleAudio resamples audio samples from one sample rate to another using linear interpolation.
+// For production, consider using a better resampling algorithm.
 func ResampleAudio(samples []float32, srcRate, dstRate int) []float32 {
 	ratio := float64(srcRate) / float64(dstRate)
 	outLen := int(float64(len(samples)) / ratio)

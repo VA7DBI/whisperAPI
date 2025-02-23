@@ -12,8 +12,10 @@ import (
 	"github.com/pion/opus"
 )
 
+// OpusFormat implements the Format interface for Opus audio files.
 type OpusFormat struct{}
 
+// GetMetadata extracts metadata from an Opus file.
 func (f *OpusFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata, error) {
 	// Standard Opus parameters
 	sampleRate := 48000  // Opus default
@@ -37,6 +39,7 @@ func (f *OpusFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata
 	}, nil
 }
 
+// ConvertToSamples converts an Opus file to a slice of float32 samples.
 func (f *OpusFormat) ConvertToSamples(filename string, targetSampleRate int) ([]float32, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -46,6 +49,9 @@ func (f *OpusFormat) ConvertToSamples(filename string, targetSampleRate int) ([]
 
 	// Create Opus decoder
 	decoder := opus.NewDecoder()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Opus decoder: %v", err)
+	}
 
 	var pcm []float32
 	const frameSize = 960 // 20ms at 48kHz

@@ -10,8 +10,10 @@ import (
 	"github.com/go-audio/wav"
 )
 
+// WAVFormat implements the Format interface for WAV audio files.
 type WAVFormat struct{}
 
+// GetMetadata extracts metadata from a WAV file.
 func (f *WAVFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -46,6 +48,7 @@ func (f *WAVFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata,
 	}, nil
 }
 
+// ConvertToSamples converts a WAV file to a slice of float32 samples.
 func (f *WAVFormat) ConvertToSamples(filename string, targetSampleRate int) ([]float32, error) {
 	file, err := os.Open(filename)
 	if err != nil {

@@ -7,6 +7,7 @@ toolchain go1.23.6
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.34.0
+	github.com/amanitaverna/go-mp3 v0.4.0
 	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250206073721-d682e150908e
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-audio/wav v1.1.0
@@ -47,6 +48,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

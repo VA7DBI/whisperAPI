@@ -1,6 +1,6 @@
 basePath: /
 definitions:
-  main.AudioMetadata:
+  audio.AudioMetadata:
     properties:
       bit_depth:
         type: integer
@@ -73,7 +73,9 @@ definitions:
   main.TranscriptionResponse:
     properties:
       audio_info:
-        $ref: '#/definitions/main.AudioMetadata'
+        allOf:
+        - $ref: '#/definitions/audio.AudioMetadata'
+        description: Updated to use audio package type
       compute_time:
         properties:
           cpu_time_seconds:
@@ -100,8 +102,15 @@ definitions:
     type: object
 host: api.openradiomap.com
 info:
-  contact: {}
+  contact:
+    email: darcy@dbitech.ca
+    name: Darcy Buskermolen
   description: A self-hosted voice-to-text transcription service using Whisper AI.
+    Supports WAV, MP3, OGG (Vorbis), and Opus formats.
+  license:
+    name: BSD-3-Clause
+    url: https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE
+  termsOfService: http://openradiomap.com/tos/
   title: Whisper API Service
   version: "1.1"
 paths:
@@ -122,9 +131,10 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Convert audio file to text using Whisper AI
+      description: Converts audio file to text using Whisper AI model. Supports WAV,
+        MP3, OGG (Vorbis), and Opus formats.
       parameters:
-      - description: Audio file to transcribe (WAV or OGG format)
+      - description: Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)
         in: formData
         name: audio
         required: true
@@ -133,52 +143,29 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successful transcription with metadata
           schema:
             $ref: '#/definitions/main.TranscriptionResponse'
         "400":
-          description: Bad Request
+          description: Invalid request (missing file, file too large)
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "401":
+          description: Unauthorized (invalid or missing API key)
           schema:
             $ref: '#/definitions/main.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Server error during processing
           schema:
             $ref: '#/definitions/main.ErrorResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Authorization header required"
-        '403':
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Invalid token"
+      security:
+      - ApiKeyAuth: []
       summary: Transcribe audio to text
       tags:
       - transcription
-      security:
-        - BearerAuth: []
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: X-API-Key
+    type: apiKey
 swagger: "2.0"
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: |
-        Bearer token authentication. Tokens can be managed in PostgreSQL or configured as static tokens.
-        Token validation uses a multi-layer approach:
-        1. Redis cache (if enabled)
-        2. PostgreSQL database (if enabled)
-        3. Static tokens (from config)

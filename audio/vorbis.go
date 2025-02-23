@@ -11,8 +11,10 @@ import (
 	"github.com/jfreymuth/oggvorbis"
 )
 
+// VorbisFormat implements the Format interface for OGG Vorbis audio files.
 type VorbisFormat struct{}
 
+// GetMetadata extracts metadata from an OGG Vorbis file.
 func (f *VorbisFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -55,6 +57,7 @@ func (f *VorbisFormat) GetMetadata(filename string, fileSize int64) (AudioMetada
 	}, nil
 }
 
+// ConvertToSamples converts an OGG Vorbis file to a slice of float32 samples.
 func (f *VorbisFormat) ConvertToSamples(filename string, targetSampleRate int) ([]float32, error) {
 	file, err := os.Open(filename)
 	if err != nil {

@@ -33,12 +33,20 @@ const (
 	NanosecondsPerSecond = 1_000_000_000
 )
 
+// OGG format detection patterns
+var (
+	oggCapturePattern = []byte("OggS")
+	vorbisHeader      = []byte("vorbis")
+	opusHeader        = []byte("OpusHead")
+)
+
+// TranscriptionService encapsulates the whisper model and configuration.
 type TranscriptionService struct {
 	model  whisper.Model
 	config *config.Config
 }
 
-// Add new types for token information
+// TokenInfo represents token information.
 type TokenInfo struct {
 	Text        string  `json:"text"`
 	Probability float64 `json:"probability"`
@@ -46,6 +54,7 @@ type TokenInfo struct {
 	EndTime     float64 `json:"end_time"`
 }
 
+// SegmentInfo represents segment information.
 type SegmentInfo struct {
 	Text      string      `json:"text"`
 	Tokens    []TokenInfo `json:"tokens"`
@@ -53,6 +62,7 @@ type SegmentInfo struct {
 	EndTime   float64     `json:"end_time"`
 }
 
+// TranscriptionResponse represents the transcription response.
 type TranscriptionResponse struct {
 	Text           string              `json:"text"`
 	Segments       []SegmentInfo       `json:"segments"`
@@ -68,6 +78,7 @@ type TranscriptionResponse struct {
 	} `json:"compute_time"`
 }
 
+// MemStats represents memory statistics.
 type MemStats struct {
 	AllocatedMB   float64 `json:"allocated_mb"`
 	TotalAllocMB  float64 `json:"total_alloc_mb"`
@@ -78,11 +89,12 @@ type MemStats struct {
 	GcPauseMicros uint64  `json:"gc_pause_micros"`
 }
 
-// ErrorResponse represents an API error response
+// ErrorResponse represents an API error response.
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// NewTranscriptionService creates a new transcription service.
 func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) {
 	model, err := whisper.New(cfg.Whisper.ModelPath)
 	if err != nil {
@@ -95,19 +107,23 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 	}, nil
 }
 
+// Close closes the transcription service.
 func (s *TranscriptionService) Close() {
 	s.model.Close()
 }
 
+// TranscribeHandler handles the transcription request.
 // @Summary     Transcribe audio to text
-// @Description Convert audio file to text using Whisper AI
+// @Description Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), and Opus formats.
 // @Tags        transcription
 // @Accept      multipart/form-data
 // @Produce     json
-// @Param       audio formData file true "Audio file to transcribe (WAV or OGG format)"
-// @Success     200 {object} TranscriptionResponse
-// @Failure     400 {object} ErrorResponse
-// @Failure     500 {object} ErrorResponse
+// @Param       audio formData file true "Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)"
+// @Success     200 {object} TranscriptionResponse "Successful transcription with metadata"
+// @Failure     400 {object} ErrorResponse "Invalid request (missing file, file too large)"
+// @Failure     401 {object} ErrorResponse "Unauthorized (invalid or missing API key)"
+// @Failure     500 {object} ErrorResponse "Server error during processing"
+// @Security    ApiKeyAuth
 // @Router      /transcribe [post]
 func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	// Get file extension for metrics labeling
@@ -291,13 +307,13 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Add error metrics in error handlers
+// handleError adds error metrics in error handlers.
 func (s *TranscriptionService) handleError(c *gin.Context, format, status string, err error) {
 	metrics.TranscriptionRequests.WithLabelValues(status, format).Inc()
 	c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 }
 
-// Update convertAudioToSamples to use the new format handlers
+// convertAudioToSamples converts the audio file to samples using the appropriate format handler.
 func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -311,6 +327,8 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 	switch ext {
 	case ".wav":
 		format = &audio.WAVFormat{}
+	case ".mp3":
+		format = &audio.MP3Format{} // Add MP3 format
 	case ".ogg":
 		// Detect codec first
 		codec, err := detectOggCodec(file)
@@ -340,7 +358,7 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 	return format.ConvertToSamples(filename, s.config.Audio.SampleRate)
 }
 
-// Update getAudioMetadata to use the new format handlers
+// getAudioMetadata retrieves audio metadata using the appropriate format handler.
 func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMetadata, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -359,6 +377,8 @@ func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMet
 	switch ext {
 	case ".wav":
 		format = &audio.WAVFormat{}
+	case ".mp3":
+		format = &audio.MP3Format{} // Add MP3 format
 	case ".ogg":
 		codec, err := detectOggCodec(file)
 		if err != nil {
@@ -386,17 +406,7 @@ func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMet
 	return format.GetMetadata(filename, fileInfo.Size())
 }
 
-// Update magic headers with more precise patterns
-var (
-	// Update magic headers for more precise patterns
-	// OGG capture pattern: "OggS"
-	oggCapturePattern = []byte("OggS")
-	// Vorbis identification header begins with \x01vorbis
-	vorbisHeader = []byte{0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73}
-	// Opus identification header begins with "OpusHead"
-	opusHeader = []byte("OpusHead")
-)
-
+// detectOggCodec detects the codec used in an OGG container.
 func detectOggCodec(file *os.File) (string, error) {
 	// Store current position to restore later
 	startPos, err := file.Seek(0, io.SeekCurrent)
@@ -473,7 +483,7 @@ func min(a, b int) int {
 	return b
 }
 
-// Rename existing convertOggToSamples to convertOggVorbisToSamples
+// convertOggVorbisToSamples converts an OGG Vorbis file to a slice of float32 samples.
 func (s *TranscriptionService) convertOggVorbisToSamples(file *os.File) ([]float32, error) {
 	// Ensure we're at the start of the file
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
@@ -515,7 +525,7 @@ func (s *TranscriptionService) convertOggVorbisToSamples(file *os.File) ([]float
 
 	// Convert to mono if stereo
 	if decoder.Channels() > 1 {
-		samples = convertToMono(samples, decoder.Channels())
+		samples = audio.ConvertToMono(samples, decoder.Channels())
 	}
 
 	// Resample to 16kHz if needed
@@ -526,6 +536,7 @@ func (s *TranscriptionService) convertOggVorbisToSamples(file *os.File) ([]float
 	return samples, nil
 }
 
+// convertWavToSamples converts a WAV file to a slice of float32 samples.
 func (s *TranscriptionService) convertWavToSamples(file *os.File) ([]float32, error) {
 	decoder := wav.NewDecoder(file)
 	if !decoder.IsValidFile() {
@@ -560,6 +571,7 @@ func (s *TranscriptionService) convertWavToSamples(file *os.File) ([]float32, er
 	return samples, nil
 }
 
+// convertOpusToSamples converts an Opus file to a slice of float32 samples.
 func (s *TranscriptionService) convertOpusToSamples(file *os.File) ([]float32, error) {
 	// Start from beginning of file
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
@@ -664,19 +676,8 @@ func (s *TranscriptionService) convertOpusToSamples(file *os.File) ([]float32, e
 	return resampleAudio(pcm, 48000, s.config.Audio.SampleRate), nil
 }
 
-func convertToMono(samples []float32, channels int) []float32 {
-	monoSamples := make([]float32, len(samples)/channels)
-	for i := 0; i < len(monoSamples); i++ {
-		sum := float32(0)
-		for ch := 0; ch < channels; ch++ {
-			sum += samples[i*channels+ch]
-		}
-		monoSamples[i] = sum / float32(channels)
-	}
-	return monoSamples
-}
-
-// Simple linear resampling - for production, consider using a better resampling algorithm
+// resampleAudio resamples audio samples from one sample rate to another using linear interpolation.
+// For production, consider using a better resampling algorithm.
 func resampleAudio(samples []float32, srcRate, dstRate int) []float32 {
 	ratio := float64(srcRate) / float64(dstRate)
 	outLen := int(float64(len(samples)) / ratio)
@@ -695,7 +696,7 @@ func resampleAudio(samples []float32, srcRate, dstRate int) []float32 {
 	return resampled
 }
 
-// Helper function to convert time.Duration to seconds
+// durationToSeconds converts a time.Duration to seconds.
 func durationToSeconds(d time.Duration) float64 {
 	return float64(d.Nanoseconds()) / float64(NanosecondsPerSecond)
 }
