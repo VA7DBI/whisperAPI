@@ -1,9 +1,17 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "A self-hosted voice-to-text transcription service using Whisper AI.",
+        "description": "A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), and Opus formats.",
         "title": "Whisper API Service",
-        "contact": {},
+        "termsOfService": "http://openradiomap.com/tos/",
+        "contact": {
+            "name": "Darcy Buskermolen",
+            "email": "darcy@dbitech.ca"
+        },
+        "license": {
+            "name": "BSD-3-Clause",
+            "url": "https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE"
+        },
         "version": "1.1"
     },
     "host": "api.openradiomap.com",
@@ -31,7 +39,12 @@
         },
         "/transcribe": {
             "post": {
-                "description": "Convert audio file to text using Whisper AI",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), and Opus formats.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -45,7 +58,7 @@
                 "parameters": [
                     {
                         "type": "file",
-                        "description": "Audio file to transcribe (WAV or OGG format)",
+                        "description": "Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)",
                         "name": "audio",
                         "in": "formData",
                         "required": true
@@ -53,19 +66,25 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Successful transcription with metadata",
                         "schema": {
                             "$ref": "#/definitions/main.TranscriptionResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request (missing file, file too large)",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (invalid or missing API key)",
                         "schema": {
                             "$ref": "#/definitions/main.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error during processing",
                         "schema": {
                             "$ref": "#/definitions/main.ErrorResponse"
                         }
@@ -75,7 +94,7 @@
         }
     },
     "definitions": {
-        "main.AudioMetadata": {
+        "audio.AudioMetadata": {
             "type": "object",
             "properties": {
                 "bit_depth": {
@@ -187,7 +206,12 @@
             "type": "object",
             "properties": {
                 "audio_info": {
-                    "$ref": "#/definitions/main.AudioMetadata"
+                    "description": "Updated to use audio package type",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/audio.AudioMetadata"
+                        }
+                    ]
                 },
                 "compute_time": {
                     "type": "object",
@@ -225,6 +249,13 @@
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
         }
     }
 }

@@ -16,6 +16,8 @@ models/ggml-base.bin
 *.test
 test_fixtures/test.ogg
 test_fixtures/test.wav
+test_fixtures/test.mp3
+test_fixtures/test.opus
 
 
 # Output of the go coverage tool, specifically when used with LiteIDE

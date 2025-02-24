@@ -1,6 +1,6 @@
 # Whisper API Service
 
-A self-hosted voice-to-text transcription API service using Whisper AI.
+A self-hosted voice-to-text transcription API service using Whisper AI. Supports multiple audio formats including WAV, MP3, OGG (Vorbis), and Opus.
 
 ## Features
 
@@ -68,9 +68,14 @@ Additional requirements for authentication:
    ```bash
    cd test_fixtures
    python makewave.py "This is a test audio file"
+   cd ..
    ```
+5. Run API tests (optional):
+  ```bash
+  go test -v ./...
+  ```
 
-5. Build and run:
+6. Build and run:
    ```bash
    go build
    ./whisperAPI

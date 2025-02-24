@@ -18,12 +18,12 @@ text = " ".join(sys.argv[1:])
 tts = gTTS(text, lang="en")
 
 # Save as an MP3 file temporarily
-mp3_path = "temp.mp3"
+mp3_path = "test.mp3"
 tts.save(mp3_path)
 
 # Convert to audio with the desired format
 audio = AudioSegment.from_mp3(mp3_path)
-audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)  # 16-bit PCM
+audio = audio.set_frame_rate(48000).set_channels(1).set_sample_width(2)  # 16-bit PCM
 
 # Export as WAV
 wav_path = "test.wav"
@@ -36,22 +36,12 @@ audio.export(ogg_path, format="ogg", codec="libvorbis",
             parameters=["-ar", "16000", "-ac", "1"])
 print(f"OGG/Vorbis file saved as {ogg_path}")
 
-# Export as Opus (using ffmpeg directly for better control)
+# Export as Opus (using opusenc directly)
 opus_path = "test.opus"
 subprocess.run([
-    "ffmpeg", "-y",
-    "-i", wav_path,
-    "-c:a", "libopus",
-    "-f", "ogg",  # Explicitly set container format
-    "-b:a", "32k",
-    "-ar", "48000",  # Opus internal rate
-    "-ac", "1",
-    "-application", "voip",
-    "-frame_duration", "20",
+    "opusenc",
+    "--bitrate", "64",
+    wav_path,
     opus_path
 ], check=True)
 print(f"Opus file saved as {opus_path}")
-
-# Cleanup temporary file
-import os
-os.remove(mp3_path)

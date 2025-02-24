@@ -23,9 +23,17 @@ var (
 
 // @title           Whisper API Service
 // @version         1.1
-// @description     A self-hosted voice-to-text transcription service using Whisper AI.
+// @description     A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), and Opus formats.
+// @termsOfService  http://openradiomap.com/tos/
+// @contact.name    Darcy Buskermolen
+// @contact.email   darcy@dbitech.ca
+// @license.name    BSD-3-Clause
+// @license.url     https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE
 // @host           api.openradiomap.com
 // @BasePath       /
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name X-API-Key
 func main() {
 	flag.Parse()
 
@@ -66,11 +74,12 @@ func main() {
 	r.Run(addr)
 }
 
-// HealthResponse represents the health check response
+// HealthResponse represents the health check response.
 type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// healthCheck is the health check endpoint.
 // @Summary     Health check endpoint
 // @Description Get API health status
 // @Tags        health

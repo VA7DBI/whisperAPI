@@ -1,0 +1,49 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg opus-tools
+        go mod download
+
+    - name: Generate test files
+      run: |
+        cd test_fixtures
+        pip install gtts pydub
+        python makewave.py "Test audio content"
+        cd ..
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v -cover ./...
+
+    - name: Run SwagGo
+      run: |
+        go install github.com/swaggo/swag/cmd/swag@latest
+        swag init
+
+    - name: Check formatting
+      run: |
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "Code is not formatted. Please run 'gofmt -w .'"
+          exit 1
+        fi
