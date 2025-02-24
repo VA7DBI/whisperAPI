@@ -64,6 +64,8 @@ jobs:
         TEST_POSTGRES_USER: postgres
         TEST_POSTGRES_PASSWORD: postgres
         TEST_POSTGRES_DB: whisperapi_test
+        CGO_CFLAGS: -I/usr/local/include
+        CGO_LDFLAGS: -L/usr/local/lib
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
