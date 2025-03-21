@@ -14,8 +14,8 @@ require (
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/lib/pq v1.10.9
 	github.com/pion/opus v0.0.0-20250214044133-5105b274bd3a
-	github.com/prometheus/client_golang v1.21.0
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/prometheus/client_golang v1.21.1
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
@@ -48,7 +48,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
