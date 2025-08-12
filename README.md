@@ -74,6 +74,11 @@ Additional requirements for authentication:
   ```bash
   go test -v ./...
   ```
+Note, if whisper.h is not in your default system include path, you may need to use the `CGO_CFLAGS` environment variable before running your `go test` or `go build`
+
+  ```bash
+  export CGO_CFLAGS="-I/usr/local/include"
+  ```
 
 6. Build and run:
    ```bash
