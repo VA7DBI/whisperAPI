@@ -58,28 +58,7 @@ func mockPostgresConstructor(cfg *config.Config) (auth.TokenStore, error) {
 	return newMockValidator(), nil
 }
 
-// Update AuthMiddleware to include store constructors for testing
-type AuthMiddleware struct {
-	cfg        *config.Config
-	redisStore auth.TokenStore
-	pgStore    auth.TokenStore
-	// Add constructors for testing
-	redisConstructor    mockStoreConstructor
-	postgresConstructor mockStoreConstructor
-}
-
-func newTestAuthMiddleware(cfg *config.Config) *AuthMiddleware {
-	// Create single constructor that returns new mock for each call
-	mockConstructor := func(cfg *config.Config) (auth.TokenStore, error) {
-		return newMockValidator(), nil
-	}
-
-	return &AuthMiddleware{
-		cfg:                 cfg,
-		redisConstructor:    mockConstructor,
-		postgresConstructor: mockConstructor,
-	}
-}
+// ...existing code...
 
 func TestAuthMiddleware(t *testing.T) {
 	cfg, mockRedis, mockPg := setupAuthTest()
@@ -217,7 +196,11 @@ func TestAuthConfigurationBehavior(t *testing.T) {
 		cfg.Auth.Redis.Enabled = true    // Should be ignored
 		cfg.Auth.Postgres.Enabled = true // Should be ignored
 
-		middleware := newTestAuthMiddleware(cfg)
+		middleware := &AuthMiddleware{
+			cfg:                 cfg,
+			redisConstructor:    mockRedisConstructor,
+			postgresConstructor: mockPostgresConstructor,
+		}
 		err := middleware.initialize()
 		assert.NoError(t, err)
 		assert.Nil(t, middleware.redisStore, "Redis store should be nil when auth is disabled")
@@ -232,7 +215,11 @@ func TestAuthConfigurationBehavior(t *testing.T) {
 		cfg.Auth.Redis.Enabled = true
 		cfg.Auth.Postgres.Enabled = false
 
-		middleware := newTestAuthMiddleware(cfg)
+		middleware := &AuthMiddleware{
+			cfg:                 cfg,
+			redisConstructor:    mockRedisConstructor,
+			postgresConstructor: mockPostgresConstructor,
+		}
 		err := middleware.initialize()
 		assert.NoError(t, err)
 		assert.NotNil(t, middleware.redisStore, "Redis store should be initialized")
@@ -242,7 +229,11 @@ func TestAuthConfigurationBehavior(t *testing.T) {
 		cfg.Auth.Redis.Enabled = false
 		cfg.Auth.Postgres.Enabled = true
 
-		middleware = newTestAuthMiddleware(cfg)
+		middleware = &AuthMiddleware{
+			cfg:                 cfg,
+			redisConstructor:    mockRedisConstructor,
+			postgresConstructor: mockPostgresConstructor,
+		}
 		err = middleware.initialize()
 		assert.NoError(t, err)
 		assert.Nil(t, middleware.redisStore, "Redis store should be nil")
@@ -252,7 +243,11 @@ func TestAuthConfigurationBehavior(t *testing.T) {
 		cfg.Auth.Redis.Enabled = true
 		cfg.Auth.Postgres.Enabled = true
 
-		middleware = newTestAuthMiddleware(cfg)
+		middleware = &AuthMiddleware{
+			cfg:                 cfg,
+			redisConstructor:    mockRedisConstructor,
+			postgresConstructor: mockPostgresConstructor,
+		}
 		err = middleware.initialize()
 		assert.NoError(t, err)
 		assert.NotNil(t, middleware.redisStore, "Redis store should be initialized")
