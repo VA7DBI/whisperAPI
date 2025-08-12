@@ -45,3 +45,19 @@ subprocess.run([
     opus_path
 ], check=True)
 print(f"Opus file saved as {opus_path}")
+
+# Export as FLAC
+flac_path = "test.flac"
+audio.export(flac_path, format="flac", parameters=["-ar", "16000", "-ac", "1"])
+print(f"FLAC file saved as {flac_path}")
+
+# Export as AAC (requires ffmpeg)
+aac_path = "test.aac"
+try:
+    audio.export(aac_path, format="aac", codec="aac", 
+                parameters=["-ar", "16000", "-ac", "1", "-b:a", "128k"])
+    print(f"AAC file saved as {aac_path}")
+except Exception as e:
+    print(f"Warning: Failed to create AAC file (ffmpeg/aac encoder may not be available): {e}")
+
+print("\nAll audio files generated successfully!")

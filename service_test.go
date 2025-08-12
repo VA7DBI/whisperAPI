@@ -39,7 +39,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	return r
 }
 
-func createTestAudioFiles(t *testing.T) (string, string, string) {
+func createTestAudioFiles(t *testing.T) (string, string, string, string, string) {
 	// Create test fixtures directory if it doesn't exist
 	fixturesDir := "test_fixtures"
 	if err := os.MkdirAll(fixturesDir, 0755); err != nil {
@@ -50,6 +50,8 @@ func createTestAudioFiles(t *testing.T) (string, string, string) {
 	wavPath := filepath.Join(fixturesDir, "test.wav")
 	oggPath := filepath.Join(fixturesDir, "test.ogg")
 	mp3Path := filepath.Join(fixturesDir, "test.mp3")
+	flacPath := filepath.Join(fixturesDir, "test.flac")
+	aacPath := filepath.Join(fixturesDir, "test.aac")
 
 	if _, err := os.Stat(wavPath); os.IsNotExist(err) {
 		t.Skipf("Test WAV file not found at %s - please add test fixtures", wavPath)
@@ -60,13 +62,19 @@ func createTestAudioFiles(t *testing.T) (string, string, string) {
 	if _, err := os.Stat(mp3Path); os.IsNotExist(err) {
 		t.Skipf("Test MP3 file not found at %s - please add test fixtures", mp3Path)
 	}
+	if _, err := os.Stat(flacPath); os.IsNotExist(err) {
+		t.Skipf("Test FLAC file not found at %s - please add test fixtures", flacPath)
+	}
+	if _, err := os.Stat(aacPath); os.IsNotExist(err) {
+		t.Logf("Test AAC file not found at %s - AAC tests will be skipped", aacPath)
+	}
 
-	return wavPath, oggPath, mp3Path
+	return wavPath, oggPath, mp3Path, flacPath, aacPath
 }
 
 func TestTranscribeHandler(t *testing.T) {
 	r := setupTestServer(t)
-	wavPath, oggPath, mp3Path := createTestAudioFiles(t)
+	wavPath, oggPath, mp3Path, flacPath, aacPath := createTestAudioFiles(t)
 
 	// Test WAV file
 	t.Run("WAV File", func(t *testing.T) {
@@ -82,6 +90,18 @@ func TestTranscribeHandler(t *testing.T) {
 	t.Run("MP3 File", func(t *testing.T) {
 		testTranscription(t, r, mp3Path)
 	})
+
+	// Test FLAC file
+	t.Run("FLAC File", func(t *testing.T) {
+		testTranscription(t, r, flacPath)
+	})
+
+	// Test AAC file (if available)
+	if _, err := os.Stat(aacPath); err == nil {
+		t.Run("AAC File", func(t *testing.T) {
+			testTranscriptionWithExpectedError(t, r, aacPath, "not fully implemented")
+		})
+	}
 }
 
 func testTranscription(t *testing.T, r *gin.Engine, audioPath string) {
@@ -133,6 +153,41 @@ func testTranscription(t *testing.T, r *gin.Engine, audioPath string) {
 	assert.Greater(t, response.Duration, float64(0))
 	assert.Greater(t, response.ProcessingTime, float64(0))
 	assert.Greater(t, response.MemoryUsage.AllocatedMB, float64(0))
+}
+
+func testTranscriptionWithExpectedError(t *testing.T, r *gin.Engine, audioPath string, expectedError string) {
+	// Create a multipart form with the audio file
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	file, err := os.Open(audioPath)
+	assert.NoError(t, err)
+	defer file.Close()
+
+	part, err := writer.CreateFormFile("audio", filepath.Base(audioPath))
+	assert.NoError(t, err)
+
+	_, err = io.Copy(part, file)
+	assert.NoError(t, err)
+
+	writer.Close()
+
+	// Create request
+	req := httptest.NewRequest("POST", "/transcribe", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Perform request
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Print the raw JSON response
+	t.Logf("Response JSON for %s: %s", filepath.Base(audioPath), w.Body.String())
+
+	// Assert that we get an error response (not 200)
+	assert.NotEqual(t, http.StatusOK, w.Code)
+	
+	// Check that the error message contains the expected error
+	assert.Contains(t, w.Body.String(), expectedError)
 }
 
 func TestHealthCheck(t *testing.T) {

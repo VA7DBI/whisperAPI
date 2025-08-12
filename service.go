@@ -329,6 +329,10 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 		format = &audio.WAVFormat{}
 	case ".mp3":
 		format = &audio.MP3Format{} // Add MP3 format
+	case ".flac":
+		format = &audio.FLACFormat{} // Add FLAC format
+	case ".aac", ".m4a":
+		format = &audio.AACFormat{} // Add AAC format
 	case ".ogg":
 		// Detect codec first
 		codec, err := detectOggCodec(file)
@@ -379,6 +383,10 @@ func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMet
 		format = &audio.WAVFormat{}
 	case ".mp3":
 		format = &audio.MP3Format{} // Add MP3 format
+	case ".flac":
+		format = &audio.FLACFormat{} // Add FLAC format
+	case ".aac", ".m4a":
+		format = &audio.AACFormat{} // Add AAC format
 	case ".ogg":
 		codec, err := detectOggCodec(file)
 		if err != nil {

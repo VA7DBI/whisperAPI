@@ -7,6 +7,9 @@ A self-hosted voice-to-text transcription API service using Whisper AI. Supports
 - Speech-to-text transcription using Whisper AI
 - Support for multiple audio formats:
   - WAV (16-bit PCM)
+  - MP3 (MPEG Layer-3)
+  - FLAC (Free Lossless Audio Codec)
+  - AAC (Advanced Audio Coding) - metadata parsing only
   - OGG/Vorbis
   - OGG/Opus
 - Automatic format detection and conversion:
