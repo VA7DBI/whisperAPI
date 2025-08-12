@@ -39,7 +39,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	return r
 }
 
-func createTestAudioFiles(t *testing.T) (string, string) {
+func createTestAudioFiles(t *testing.T) (string, string, string) {
 	// Create test fixtures directory if it doesn't exist
 	fixturesDir := "test_fixtures"
 	if err := os.MkdirAll(fixturesDir, 0755); err != nil {
@@ -49,6 +49,7 @@ func createTestAudioFiles(t *testing.T) (string, string) {
 	// Check for test files
 	wavPath := filepath.Join(fixturesDir, "test.wav")
 	oggPath := filepath.Join(fixturesDir, "test.ogg")
+	mp3Path := filepath.Join(fixturesDir, "test.mp3")
 
 	if _, err := os.Stat(wavPath); os.IsNotExist(err) {
 		t.Skipf("Test WAV file not found at %s - please add test fixtures", wavPath)
@@ -56,13 +57,16 @@ func createTestAudioFiles(t *testing.T) (string, string) {
 	if _, err := os.Stat(oggPath); os.IsNotExist(err) {
 		t.Skipf("Test OGG file not found at %s - please add test fixtures", oggPath)
 	}
+	if _, err := os.Stat(mp3Path); os.IsNotExist(err) {
+		t.Skipf("Test MP3 file not found at %s - please add test fixtures", mp3Path)
+	}
 
-	return wavPath, oggPath
+	return wavPath, oggPath, mp3Path
 }
 
 func TestTranscribeHandler(t *testing.T) {
 	r := setupTestServer(t)
-	wavPath, oggPath := createTestAudioFiles(t)
+	wavPath, oggPath, mp3Path := createTestAudioFiles(t)
 
 	// Test WAV file
 	t.Run("WAV File", func(t *testing.T) {
@@ -72,6 +76,11 @@ func TestTranscribeHandler(t *testing.T) {
 	// Test OGG file
 	t.Run("OGG File", func(t *testing.T) {
 		testTranscription(t, r, oggPath)
+	})
+
+	// Test MP3 file
+	t.Run("MP3 File", func(t *testing.T) {
+		testTranscription(t, r, mp3Path)
 	})
 }
 

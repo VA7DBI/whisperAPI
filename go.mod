@@ -7,10 +7,12 @@ toolchain go1.23.6
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/altager/oggopus v0.0.0-20200621123215-cda0cc4f6163
 	github.com/amanitaverna/go-mp3 v0.4.0
 	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250206073721-d682e150908e
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-audio/wav v1.1.0
+	github.com/hraban/opus v0.0.0-20230925203106-0188a62cb302
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/lib/pq v1.10.9
 	github.com/pion/opus v0.0.0-20250214044133-5105b274bd3a
@@ -74,4 +76,5 @@ require (
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )

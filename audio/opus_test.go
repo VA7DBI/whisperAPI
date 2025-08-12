@@ -6,6 +6,8 @@ package audio
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,6 +42,16 @@ func TestOpusFormat_ConvertToSamples(t *testing.T) {
 
 	format := &OpusFormat{}
 	samples, err := format.ConvertToSamples(testFile, targetSampleRate)
+
+	// Check if we're on Windows or CGO is disabled
+	if runtime.GOOS == "windows" || (err != nil && strings.Contains(err.Error(), "requires CGO")) {
+		// On Windows without CGO, we expect an error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "requires CGO")
+		return
+	}
+
+	// On other platforms with CGO available, function should succeed
 	assert.NoError(t, err)
 	assert.NotEmpty(t, samples)
 }
