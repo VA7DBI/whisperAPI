@@ -17,7 +17,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pion/opus v0.0.0-20250214044133-5105b274bd3a
 	github.com/prometheus/client_golang v1.23.0
-	github.com/redis/go-redis/v9 v9.12.0
+	github.com/redis/go-redis/v9 v9.12.1
 	github.com/stretchr/testify v1.10.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
