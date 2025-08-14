@@ -15,9 +15,9 @@ func TestAACFormat_GetMetadata(t *testing.T) {
 	format := &AACFormat{}
 	testFile := filepath.Join("..", "test_fixtures", "test.aac")
 
-	// Check if test file exists
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Skip("test.aac not found, skipping AAC metadata test")
+	// Check if test file exists and is not empty
+	if fileInfo, err := os.Stat(testFile); os.IsNotExist(err) || fileInfo.Size() == 0 {
+		t.Skip("test.aac not found or empty, skipping AAC metadata test")
 	}
 
 	fileInfo, err := os.Stat(testFile)
@@ -42,9 +42,9 @@ func TestAACFormat_ConvertToSamples(t *testing.T) {
 	format := &AACFormat{}
 	testFile := filepath.Join("..", "test_fixtures", "test.aac")
 
-	// Check if test file exists
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Skip("test.aac not found, skipping AAC conversion test")
+	// Check if test file exists and is not empty
+	if fileInfo, err := os.Stat(testFile); os.IsNotExist(err) || fileInfo.Size() == 0 {
+		t.Skip("test.aac not found or empty, skipping AAC conversion test")
 	}
 
 	samples, err := format.ConvertToSamples(testFile, 16000)

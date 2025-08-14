@@ -21,19 +21,19 @@ var (
 	configFile = flag.String("config", "config.yaml", "Path to configuration file")
 )
 
-// @title           Whisper API Service
-// @version         1.1
-// @description     A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), and Opus formats.
-// @termsOfService  http://openradiomap.com/tos/
-// @contact.name    Darcy Buskermolen
-// @contact.email   darcy@dbitech.ca
-// @license.name    BSD-3-Clause
-// @license.url     https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE
-// @host           api.openradiomap.com
-// @BasePath       /
-// @securityDefinitions.apikey ApiKeyAuth
-// @in header
-// @name X-API-Key
+// @title						Whisper API Service
+// @version					1.1
+// @description				A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
+// @termsOfService				http://openradiomap.com/tos/
+// @contact.name				Darcy Buskermolen
+// @contact.email				darcy@dbitech.ca
+// @license.name				BSD-3-Clause
+// @license.url				https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE
+// @host						api.openradiomap.com
+// @BasePath					/
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						X-API-Key
 func main() {
 	flag.Parse()
 
@@ -80,12 +80,13 @@ type HealthResponse struct {
 }
 
 // healthCheck is the health check endpoint.
-// @Summary     Health check endpoint
-// @Description Get API health status
-// @Tags        health
-// @Produce     json
-// @Success     200 {object} HealthResponse
-// @Router      /health [get]
+//
+//	@Summary		Health check endpoint
+//	@Description	Get API health status
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	HealthResponse
+//	@Router			/health [get]
 func healthCheck(c *gin.Context) {
 	c.JSON(200, HealthResponse{Status: "ok"})
 }

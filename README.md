@@ -10,6 +10,7 @@ A self-hosted voice-to-text transcription API service using Whisper AI. Supports
   - MP3 (MPEG Layer-3)
   - FLAC (Free Lossless Audio Codec)
   - AAC (Advanced Audio Coding) - metadata parsing only
+  - Speex (Speech codec) - metadata parsing only
   - OGG/Vorbis
   - OGG/Opus
 - Automatic format detection and conversion:

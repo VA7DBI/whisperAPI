@@ -54,10 +54,21 @@ print(f"FLAC file saved as {flac_path}")
 # Export as AAC (requires ffmpeg)
 aac_path = "test.aac"
 try:
-    audio.export(aac_path, format="aac", codec="aac", 
+    #ffmpeg -f wav -i /tmp/tmp4q5p9c4p -codec:a aac -f adts /tmp/tmpracqrn7z
+
+    audio.export(aac_path, format="adts", codec="aac", 
                 parameters=["-ar", "16000", "-ac", "1", "-b:a", "128k"])
     print(f"AAC file saved as {aac_path}")
 except Exception as e:
     print(f"Warning: Failed to create AAC file (ffmpeg/aac encoder may not be available): {e}")
+
+# Export as Speex (requires ffmpeg with speex support)
+speex_path = "test.spx"
+try:
+    audio.export(speex_path, format="spx", codec="libspeex",
+                parameters=["-ar", "16000", "-ac", "1", "-ab", "24k"])
+    print(f"Speex file saved as {speex_path}")
+except Exception as e:
+    print(f"Warning: Failed to create Speex file (ffmpeg/speex encoder may not be available): {e}")
 
 print("\nAll audio files generated successfully!")

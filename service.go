@@ -113,18 +113,18 @@ func (s *TranscriptionService) Close() {
 }
 
 // TranscribeHandler handles the transcription request.
-// @Summary     Transcribe audio to text
-// @Description Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), and Opus formats.
-// @Tags        transcription
-// @Accept      multipart/form-data
-// @Produce     json
-// @Param       audio formData file true "Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)"
-// @Success     200 {object} TranscriptionResponse "Successful transcription with metadata"
-// @Failure     400 {object} ErrorResponse "Invalid request (missing file, file too large)"
-// @Failure     401 {object} ErrorResponse "Unauthorized (invalid or missing API key)"
-// @Failure     500 {object} ErrorResponse "Server error during processing"
-// @Security    ApiKeyAuth
-// @Router      /transcribe [post]
+//	@Summary		Transcribe audio to text
+//	@Description	Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
+//	@Tags			transcription
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			audio	formData	file					true	"Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)"
+//	@Success		200		{object}	TranscriptionResponse	"Successful transcription with metadata"
+//	@Failure		400		{object}	ErrorResponse			"Invalid request (missing file, file too large)"
+//	@Failure		401		{object}	ErrorResponse			"Unauthorized (invalid or missing API key)"
+//	@Failure		500		{object}	ErrorResponse			"Server error during processing"
+//	@Security		ApiKeyAuth
+//	@Router			/transcribe [post]
 func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	// Get file extension for metrics labeling
 	file, err := c.FormFile("audio")
@@ -333,6 +333,8 @@ func (s *TranscriptionService) convertAudioToSamples(filename string) ([]float32
 		format = &audio.FLACFormat{} // Add FLAC format
 	case ".aac", ".m4a":
 		format = &audio.AACFormat{} // Add AAC format
+	case ".spx":
+		format = &audio.SpeexFormat{} // Add Speex format
 	case ".ogg":
 		// Detect codec first
 		codec, err := detectOggCodec(file)
@@ -387,6 +389,8 @@ func (s *TranscriptionService) getAudioMetadata(filename string) (audio.AudioMet
 		format = &audio.FLACFormat{} // Add FLAC format
 	case ".aac", ".m4a":
 		format = &audio.AACFormat{} // Add AAC format
+	case ".spx":
+		format = &audio.SpeexFormat{} // Add Speex format
 	case ".ogg":
 		codec, err := detectOggCodec(file)
 		if err != nil {

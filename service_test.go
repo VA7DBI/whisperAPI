@@ -39,7 +39,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	return r
 }
 
-func createTestAudioFiles(t *testing.T) (string, string, string, string, string) {
+func createTestAudioFiles(t *testing.T) (string, string, string, string, string, string) {
 	// Create test fixtures directory if it doesn't exist
 	fixturesDir := "test_fixtures"
 	if err := os.MkdirAll(fixturesDir, 0755); err != nil {
@@ -52,6 +52,7 @@ func createTestAudioFiles(t *testing.T) (string, string, string, string, string)
 	mp3Path := filepath.Join(fixturesDir, "test.mp3")
 	flacPath := filepath.Join(fixturesDir, "test.flac")
 	aacPath := filepath.Join(fixturesDir, "test.aac")
+	speexPath := filepath.Join(fixturesDir, "test.spx")
 
 	if _, err := os.Stat(wavPath); os.IsNotExist(err) {
 		t.Skipf("Test WAV file not found at %s - please add test fixtures", wavPath)
@@ -68,13 +69,16 @@ func createTestAudioFiles(t *testing.T) (string, string, string, string, string)
 	if _, err := os.Stat(aacPath); os.IsNotExist(err) {
 		t.Logf("Test AAC file not found at %s - AAC tests will be skipped", aacPath)
 	}
+	if _, err := os.Stat(speexPath); os.IsNotExist(err) {
+		t.Logf("Test Speex file not found at %s - Speex tests will be skipped", speexPath)
+	}
 
-	return wavPath, oggPath, mp3Path, flacPath, aacPath
+	return wavPath, oggPath, mp3Path, flacPath, aacPath, speexPath
 }
 
 func TestTranscribeHandler(t *testing.T) {
 	r := setupTestServer(t)
-	wavPath, oggPath, mp3Path, flacPath, aacPath := createTestAudioFiles(t)
+	wavPath, oggPath, mp3Path, flacPath, aacPath, speexPath := createTestAudioFiles(t)
 
 	// Test WAV file
 	t.Run("WAV File", func(t *testing.T) {
@@ -100,6 +104,13 @@ func TestTranscribeHandler(t *testing.T) {
 	if _, err := os.Stat(aacPath); err == nil {
 		t.Run("AAC File", func(t *testing.T) {
 			testTranscriptionWithExpectedError(t, r, aacPath, "not fully implemented")
+		})
+	}
+
+	// Test Speex file (if available)
+	if _, err := os.Stat(speexPath); err == nil {
+		t.Run("Speex File", func(t *testing.T) {
+			testTranscriptionWithExpectedError(t, r, speexPath, "not fully implemented")
 		})
 	}
 }

@@ -50,7 +50,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), and Opus formats.",
+                "description": "Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -64,7 +64,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "file",
-                        "description": "Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)",
+                        "description": "Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)",
                         "name": "audio",
                         "in": "formData",
                         "required": true
@@ -273,7 +273,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Whisper API Service",
-	Description:      "A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), and Opus formats.",
+	Description:      "A self-hosted voice-to-text transcription service using Whisper AI. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
