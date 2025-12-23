@@ -18,7 +18,7 @@ require (
 	github.com/mewkiz/flac v1.0.13
 	github.com/pion/opus v0.0.0-20250214044133-5105b274bd3a
 	github.com/prometheus/client_golang v1.23.2
-	github.com/redis/go-redis/v9 v9.14.0
+	github.com/redis/go-redis/v9 v9.17.2
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.1
