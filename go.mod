@@ -7,18 +7,18 @@ toolchain go1.23.6
 require (
 	github.com/Comcast/gaad v1.0.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/altager/oggopus v0.0.0-20200621123215-cda0cc4f6163
 	github.com/amanitaverna/go-mp3 v0.4.0
 	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250206073721-d682e150908e
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-audio/wav v1.1.0
 	github.com/jfreymuth/oggvorbis v1.0.5
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.11.0
 	github.com/mewkiz/flac v1.0.13
 	github.com/pion/opus v0.0.0-20250214044133-5105b274bd3a
 	github.com/prometheus/client_golang v1.23.2
-	github.com/redis/go-redis/v9 v9.14.0
+	github.com/redis/go-redis/v9 v9.17.3
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.1
