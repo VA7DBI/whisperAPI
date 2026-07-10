@@ -106,7 +106,8 @@ info:
     email: darcy@dbitech.ca
     name: Darcy Buskermolen
   description: A self-hosted voice-to-text transcription service using Whisper AI.
-    Supports WAV, MP3, OGG (Vorbis), and Opus formats.
+    Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx)
+    formats.
   license:
     name: BSD-3-Clause
     url: https://github.com/VA7DBI/whisperAPI/blob/main/LICENSE
@@ -132,9 +133,10 @@ paths:
       consumes:
       - multipart/form-data
       description: Converts audio file to text using Whisper AI model. Supports WAV,
-        MP3, OGG (Vorbis), and Opus formats.
+        MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
       parameters:
-      - description: Audio file to transcribe (WAV, MP3, OGG Vorbis, or Opus format)
+      - description: Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC,
+          or Speex format)
         in: formData
         name: audio
         required: true

@@ -43,13 +43,13 @@ func (f *FLACFormat) GetMetadata(filename string, fileSize int64) (AudioMetadata
 	}
 
 	return AudioMetadata{
-		Duration:   durationSeconds,
-		SampleRate: int(streamInfo.SampleRate),
-		Channels:   int(streamInfo.NChannels),
-		Bitrate:    bitrate,
-		Format:     "FLAC",
-		Codec:      "FLAC",
-		BitDepth:   int(streamInfo.BitsPerSample),
+		Duration:     durationSeconds,
+		SampleRate:   int(streamInfo.SampleRate),
+		Channels:     int(streamInfo.NChannels),
+		Bitrate:      bitrate,
+		Format:       "FLAC",
+		Codec:        "FLAC",
+		BitDepth:     int(streamInfo.BitsPerSample),
 		OriginalSize: fileSize,
 	}, nil
 }
@@ -134,11 +134,11 @@ func (f *FLACFormat) convertFLACFrame(frame *frame.Frame, streamInfo *meta.Strea
 
 	// Convert to float32 samples
 	result := make([]float32, blockSize)
-	
+
 	// Scale factor to convert from integer samples to float32 range [-1.0, 1.0]
 	maxValue := int32(1 << (bitsPerSample - 1))
 	scale := float32(1.0) / float32(maxValue)
-	
+
 	if nChannels == 1 {
 		// Mono audio
 		for i := 0; i < blockSize; i++ {

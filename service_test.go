@@ -196,7 +196,7 @@ func testTranscriptionWithExpectedError(t *testing.T, r *gin.Engine, audioPath s
 
 	// Assert that we get an error response (not 200)
 	assert.NotEqual(t, http.StatusOK, w.Code)
-	
+
 	// Check that the error message contains the expected error
 	assert.Contains(t, w.Body.String(), expectedError)
 }

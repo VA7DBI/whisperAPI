@@ -19,10 +19,31 @@ metrics:
   enabled: true
   path: /metrics
 
+cors:
+  enabled: true
+  allow_all_origins: true  # Development setting; set false in production.
+  allowed_origins: []
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+    - HEAD
+    - OPTIONS
+  allowed_headers:
+    - Origin
+    - Content-Type
+    - Content-Length
+    - Authorization
+    - X-API-Key
+  expose_headers:
+    - Content-Length
+
 auth:
   enabled: false  # Set to true to enable authentication
   tokens:         # List of valid bearer tokens
-    - "your-secret-token-1"
+    - "your-api-token-here"
   redis:
     enabled: true
     host: "redis-01"
@@ -32,7 +53,7 @@ auth:
     key_ttl: 3600  # 1 hour
   postgres:
     enabled: true
-    host: "pg17-01"
+    host: "pg18-01"
     port: 5432
     user: "postgres"
     password: "secret"

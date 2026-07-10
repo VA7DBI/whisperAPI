@@ -16,21 +16,21 @@ type SpeexFormat struct{}
 
 // SpeexHeader represents the Speex header structure
 type SpeexHeader struct {
-	SpeexString      [8]byte  // "Speex   "
-	SpeexVersion     [20]byte // Version string
-	SpeexVersionID   uint32   // Version ID
-	HeaderSize       uint32   // Header size
-	Rate             uint32   // Sample rate
-	Mode             uint32   // Encoding mode (0=narrowband, 1=wideband, 2=ultra-wideband)
-	ModeBitstreamVersion uint32 // Mode bitstream version
-	Channels         uint32   // Number of channels
-	Bitrate          int32    // Bitrate (-1 if VBR)
-	FrameSize        uint32   // Frame size
-	VBR              uint32   // VBR flag
-	FramesPerPacket  uint32   // Frames per Ogg packet
-	ExtraHeaders     uint32   // Extra headers
-	Reserved1        uint32   // Reserved
-	Reserved2        uint32   // Reserved
+	SpeexString          [8]byte  // "Speex   "
+	SpeexVersion         [20]byte // Version string
+	SpeexVersionID       uint32   // Version ID
+	HeaderSize           uint32   // Header size
+	Rate                 uint32   // Sample rate
+	Mode                 uint32   // Encoding mode (0=narrowband, 1=wideband, 2=ultra-wideband)
+	ModeBitstreamVersion uint32   // Mode bitstream version
+	Channels             uint32   // Number of channels
+	Bitrate              int32    // Bitrate (-1 if VBR)
+	FrameSize            uint32   // Frame size
+	VBR                  uint32   // VBR flag
+	FramesPerPacket      uint32   // Frames per Ogg packet
+	ExtraHeaders         uint32   // Extra headers
+	Reserved1            uint32   // Reserved
+	Reserved2            uint32   // Reserved
 }
 
 // GetMetadata extracts metadata from a Speex file.
@@ -112,12 +112,12 @@ func (f *SpeexFormat) ConvertToSamples(filename string, targetSampleRate int) ([
 	// 1. CGO bindings like github.com/chinatcp/go-speex (requires gcc and libspeex)
 	// 2. External tools like ffmpeg
 	// 3. speexdec command-line tool
-	// 
+	//
 	// To enable github.com/chinatcp/go-speex:
 	// - Install gcc compiler
 	// - Install libspeex development libraries
 	// - Enable CGO_ENABLED=1
 	// - Import "github.com/chinatcp/go-speex/speex"
-	
+
 	return nil, fmt.Errorf("Speex audio decoding is not fully implemented yet - requires CGO bindings (github.com/chinatcp/go-speex) or external tools like ffmpeg. Consider using speexdec for conversion to WAV first")
 }

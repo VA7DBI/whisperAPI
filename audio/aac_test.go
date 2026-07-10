@@ -24,7 +24,7 @@ func TestAACFormat_GetMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	metadata, err := format.GetMetadata(testFile, fileInfo.Size())
-	
+
 	// AAC parsing might fail if file format is different than expected
 	if err != nil {
 		t.Logf("AAC metadata extraction failed (this is expected if test.aac is not in ADTS format): %v", err)
@@ -48,7 +48,7 @@ func TestAACFormat_ConvertToSamples(t *testing.T) {
 	}
 
 	samples, err := format.ConvertToSamples(testFile, 16000)
-	
+
 	// This should fail with the current implementation as noted in the code
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not fully implemented")

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/VA7DBI/whisperAPI/config"
 	_ "github.com/VA7DBI/whisperAPI/docs"
@@ -44,6 +45,10 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	if cfg.CORS.Enabled {
+		r.Use(corsMiddleware(cfg))
+	}
 
 	// Initialize transcription service with config
 	service, err := NewTranscriptionService(cfg)
@@ -89,4 +94,50 @@ type HealthResponse struct {
 //	@Router			/health [get]
 func healthCheck(c *gin.Context) {
 	c.JSON(200, HealthResponse{Status: "ok"})
+}
+
+func corsMiddleware(cfg *config.Config) gin.HandlerFunc {
+	allowMethods := strings.Join(cfg.CORS.AllowedMethods, ", ")
+	allowHeaders := strings.Join(cfg.CORS.AllowedHeaders, ", ")
+	exposeHeaders := strings.Join(cfg.CORS.ExposeHeaders, ", ")
+
+	allowedOrigins := make(map[string]struct{}, len(cfg.CORS.AllowedOrigins))
+	for _, origin := range cfg.CORS.AllowedOrigins {
+		allowedOrigins[origin] = struct{}{}
+	}
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		allowOrigin := cfg.CORS.AllowAllOrigins
+
+		if !allowOrigin {
+			_, allowOrigin = allowedOrigins[origin]
+		}
+
+		if allowOrigin {
+			if cfg.CORS.AllowAllOrigins {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			} else {
+				c.Writer.Header().Set("Vary", "Origin")
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			}
+		}
+
+		c.Writer.Header().Set("Access-Control-Allow-Methods", allowMethods)
+		c.Writer.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+		if exposeHeaders != "" {
+			c.Writer.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
+		}
+
+		if c.Request.Method == "OPTIONS" {
+			if !allowOrigin {
+				c.AbortWithStatus(403)
+				return
+			}
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }

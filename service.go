@@ -113,6 +113,7 @@ func (s *TranscriptionService) Close() {
 }
 
 // TranscribeHandler handles the transcription request.
+//
 //	@Summary		Transcribe audio to text
 //	@Description	Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
 //	@Tags			transcription

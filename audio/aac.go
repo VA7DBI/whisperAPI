@@ -74,6 +74,6 @@ func (f *AACFormat) ConvertToSamples(filename string, targetSampleRate int) ([]f
 	// and doesn't provide full AAC decoding capabilities. For full AAC decoding,
 	// we would need a different library or external tool like ffmpeg.
 	// For now, we'll return an error indicating that AAC decoding is not fully implemented.
-	
+
 	return nil, fmt.Errorf("AAC audio decoding is not fully implemented yet - the gaad library only provides ADTS parsing. Consider using ffmpeg or another decoder library for full AAC support")
 }

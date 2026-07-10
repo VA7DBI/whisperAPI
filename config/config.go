@@ -37,6 +37,15 @@ type Config struct {
 		Path    string `yaml:"path"`
 	} `yaml:"metrics"`
 
+	CORS struct {
+		Enabled         bool     `yaml:"enabled"`
+		AllowAllOrigins bool     `yaml:"allow_all_origins"`
+		AllowedOrigins  []string `yaml:"allowed_origins"`
+		AllowedMethods  []string `yaml:"allowed_methods"`
+		AllowedHeaders  []string `yaml:"allowed_headers"`
+		ExposeHeaders   []string `yaml:"expose_headers"`
+	} `yaml:"cors"`
+
 	Auth struct {
 		Enabled bool     `yaml:"enabled"`
 		Tokens  []string `yaml:"tokens"` // Fallback static tokens
@@ -90,6 +99,15 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if config.Metrics.Path == "" {
 		config.Metrics.Path = "/metrics"
+	}
+	if len(config.CORS.AllowedMethods) == 0 {
+		config.CORS.AllowedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+	}
+	if len(config.CORS.AllowedHeaders) == 0 {
+		config.CORS.AllowedHeaders = []string{"Origin", "Content-Type", "Content-Length", "Authorization", "X-API-Key"}
+	}
+	if len(config.CORS.ExposeHeaders) == 0 {
+		config.CORS.ExposeHeaders = []string{"Content-Length"}
 	}
 
 	return config, nil
