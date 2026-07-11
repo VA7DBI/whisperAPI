@@ -71,7 +71,8 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "whisper"
+                            "whisper",
+                            "parakeet"
                         ],
                         "type": "string",
                         "description": "Speech-to-text engine to use (default: whisper)",

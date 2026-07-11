@@ -245,7 +245,36 @@ Request:
 - Form field: "audio" (file)
 - Optional form field: "engine" (string, defaults to "whisper")
 - Supported formats: WAV, OGG/Vorbis, OGG/Opus
-- Supported engines: whisper
+- Supported engines: whisper, parakeet
+
+Parakeet engine configuration (optional):
+
+```yaml
+parakeet:
+  endpoint: "http://localhost:8081/transcribe"
+  timeout_seconds: 30
+  language: en
+```
+
+When `engine=parakeet` is sent, the API forwards the audio to the configured Parakeet endpoint as JSON:
+
+```json
+{
+  "audio_base64": "...",
+  "sample_rate": 16000,
+  "language": "en"
+}
+```
+
+Expected Parakeet response JSON:
+
+```json
+{
+  "text": "Transcribed text content",
+  "confidence": 0.94,
+  "segments": []
+}
+```
 
 Response:
 

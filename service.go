@@ -5,6 +5,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +34,7 @@ const (
 	WhisperSampleLength  = 0.02 // Each sample is 20ms in Whisper
 	NanosecondsPerSecond = 1_000_000_000
 	EngineWhisper        = "whisper"
+	EngineParakeet       = "parakeet"
 )
 
 // OGG format detection patterns
@@ -97,7 +100,21 @@ type ErrorResponse struct {
 }
 
 var supportedTranscriptionEngines = map[string]struct{}{
-	EngineWhisper: {},
+	EngineWhisper:  {},
+	EngineParakeet: {},
+}
+
+type parakeetTranscriptionRequest struct {
+	AudioBase64 string `json:"audio_base64"`
+	SampleRate  int    `json:"sample_rate"`
+	Language    string `json:"language,omitempty"`
+}
+
+type parakeetTranscriptionResponse struct {
+	Text       string        `json:"text"`
+	Segments   []SegmentInfo `json:"segments"`
+	Confidence *float64      `json:"confidence,omitempty"`
+	Error      string        `json:"error,omitempty"`
 }
 
 // NewTranscriptionService creates a new transcription service.
@@ -126,7 +143,7 @@ func (s *TranscriptionService) Close() {
 //	@Accept			multipart/form-data
 //	@Produce		json
 //	@Param			audio	formData	file					true	"Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)"
-//	@Param			engine	formData	string				false	"Speech-to-text engine to use (default: whisper)" Enums(whisper)
+//	@Param			engine	formData	string				false	"Speech-to-text engine to use (default: whisper)" Enums(whisper,parakeet)
 //	@Success		200		{object}	TranscriptionResponse	"Successful transcription with metadata"
 //	@Failure		400		{object}	ErrorResponse			"Invalid request (missing file, file too large)"
 //	@Failure		401		{object}	ErrorResponse			"Unauthorized (invalid or missing API key)"
@@ -208,10 +225,10 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	var rusageStart, rusageEnd syscall.Rusage
 	syscall.Getrusage(syscall.RUSAGE_SELF, &rusageStart)
 
-	text, segments, confidence, err := s.transcribeWithEngine(engine, samples)
+	text, segments, confidence, err := s.transcribeWithEngine(engine, tmpFile.Name(), samples)
 	if err != nil {
 		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to process audio: %v", err)})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to process audio with %s: %v", engine, err)})
 		return
 	}
 
@@ -281,19 +298,80 @@ func parseTranscriptionEngine(raw string) (string, error) {
 	}
 
 	if _, ok := supportedTranscriptionEngines[engine]; !ok {
-		return "", fmt.Errorf("unsupported engine: %s (supported engines: whisper)", engine)
+		return "", fmt.Errorf("unsupported engine: %s (supported engines: whisper, parakeet)", engine)
 	}
 
 	return engine, nil
 }
 
-func (s *TranscriptionService) transcribeWithEngine(engine string, samples []float32) (string, []SegmentInfo, float64, error) {
+func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, samples []float32) (string, []SegmentInfo, float64, error) {
 	switch engine {
 	case EngineWhisper:
 		return s.transcribeWithWhisper(samples)
+	case EngineParakeet:
+		return s.transcribeWithParakeet(audioPath)
 	default:
 		return "", nil, 0, fmt.Errorf("unsupported engine: %s", engine)
 	}
+}
+
+func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string, []SegmentInfo, float64, error) {
+	if strings.TrimSpace(s.config.Parakeet.Endpoint) == "" {
+		return "", nil, 0, fmt.Errorf("parakeet endpoint is not configured")
+	}
+
+	audioBytes, err := os.ReadFile(audioPath)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("failed to read audio for parakeet: %v", err)
+	}
+
+	requestBody := parakeetTranscriptionRequest{
+		AudioBase64: base64.StdEncoding.EncodeToString(audioBytes),
+		SampleRate:  s.config.Audio.SampleRate,
+		Language:    strings.TrimSpace(s.config.Parakeet.Language),
+	}
+
+	payload, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("failed to encode parakeet request: %v", err)
+	}
+
+	timeout := time.Duration(s.config.Parakeet.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Post(s.config.Parakeet.Endpoint, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("failed to call parakeet endpoint: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("failed to read parakeet response: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, 0, fmt.Errorf("parakeet endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed parakeetTranscriptionResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", nil, 0, fmt.Errorf("failed to decode parakeet response: %v", err)
+	}
+
+	if parsed.Error != "" {
+		return "", nil, 0, fmt.Errorf("parakeet error: %s", parsed.Error)
+	}
+
+	confidence := 0.0
+	if parsed.Confidence != nil {
+		confidence = *parsed.Confidence
+	}
+
+	return parsed.Text, parsed.Segments, confidence, nil
 }
 
 func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string, []SegmentInfo, float64, error) {

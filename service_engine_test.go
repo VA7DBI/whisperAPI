@@ -21,8 +21,15 @@ func TestParseTranscriptionEngine_NormalizesInput(t *testing.T) {
 	assert.Equal(t, EngineWhisper, engine)
 }
 
+func TestParseTranscriptionEngine_Parakeet(t *testing.T) {
+	engine, err := parseTranscriptionEngine("PARAKEET")
+	assert.NoError(t, err)
+	assert.Equal(t, EngineParakeet, engine)
+}
+
 func TestParseTranscriptionEngine_Unsupported(t *testing.T) {
 	_, err := parseTranscriptionEngine("faster-whisper")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported engine")
+	assert.Contains(t, err.Error(), "parakeet")
 }

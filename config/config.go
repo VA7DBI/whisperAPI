@@ -26,6 +26,12 @@ type Config struct {
 		Language  string `yaml:"language"`
 	} `yaml:"whisper"`
 
+	Parakeet struct {
+		Endpoint       string `yaml:"endpoint"`
+		TimeoutSeconds int    `yaml:"timeout_seconds"`
+		Language       string `yaml:"language"`
+	} `yaml:"parakeet"`
+
 	Audio struct {
 		SampleRate  int   `yaml:"sample_rate"`
 		MaxDuration int   `yaml:"max_duration_seconds"`
@@ -99,6 +105,9 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if config.Metrics.Path == "" {
 		config.Metrics.Path = "/metrics"
+	}
+	if config.Parakeet.TimeoutSeconds == 0 {
+		config.Parakeet.TimeoutSeconds = 30
 	}
 	if len(config.CORS.AllowedMethods) == 0 {
 		config.CORS.AllowedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
