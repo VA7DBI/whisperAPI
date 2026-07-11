@@ -79,6 +79,7 @@ func TestDefaultValues(t *testing.T) {
 	assert.Equal(t, 16000, cfg.Audio.SampleRate)
 	assert.Equal(t, "models/ggml-base.bin", cfg.Whisper.ModelPath)
 	assert.Equal(t, 30, cfg.Parakeet.TimeoutSeconds)
+	assert.Equal(t, "parakeet-tdt-0.6b", cfg.Parakeet.Model)
 	assert.Equal(t, "/metrics", cfg.Metrics.Path)
 	assert.Equal(t, []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}, cfg.CORS.AllowedMethods)
 	assert.Equal(t, []string{"Origin", "Content-Type", "Content-Length", "Authorization", "X-API-Key"}, cfg.CORS.AllowedHeaders)

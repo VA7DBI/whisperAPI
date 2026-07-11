@@ -30,6 +30,7 @@ type Config struct {
 		Endpoint       string `yaml:"endpoint"`
 		TimeoutSeconds int    `yaml:"timeout_seconds"`
 		Language       string `yaml:"language"`
+		Model          string `yaml:"model"`
 	} `yaml:"parakeet"`
 
 	Audio struct {
@@ -108,6 +109,9 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if config.Parakeet.TimeoutSeconds == 0 {
 		config.Parakeet.TimeoutSeconds = 30
+	}
+	if config.Parakeet.Model == "" {
+		config.Parakeet.Model = "parakeet-tdt-0.6b"
 	}
 	if len(config.CORS.AllowedMethods) == 0 {
 		config.CORS.AllowedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}

@@ -5,12 +5,14 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -105,9 +107,8 @@ var supportedTranscriptionEngines = map[string]struct{}{
 }
 
 type parakeetTranscriptionRequest struct {
-	AudioBase64 string `json:"audio_base64"`
-	SampleRate  int    `json:"sample_rate"`
-	Language    string `json:"language,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 type parakeetTranscriptionResponse struct {
@@ -136,8 +137,12 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 }
 
 func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
-	endpoint := strings.TrimSpace(cfg.Parakeet.Endpoint)
-	if endpoint == "" {
+	transcriptionURL, err := resolveParakeetTranscriptionEndpoint(strings.TrimSpace(cfg.Parakeet.Endpoint))
+	if err != nil {
+		return fmt.Errorf("invalid parakeet endpoint: %v", err)
+	}
+
+	if transcriptionURL == "" {
 		return nil
 	}
 
@@ -146,8 +151,8 @@ func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
 		timeout = 30 * time.Second
 	}
 
-	if err := probeParakeetEndpoint(endpoint, timeout); err != nil {
-		return fmt.Errorf("parakeet endpoint startup probe failed for %s: %v", endpoint, err)
+	if err := probeParakeetEndpoint(transcriptionURL, timeout); err != nil {
+		return fmt.Errorf("parakeet endpoint startup probe failed for %s: %v", transcriptionURL, err)
 	}
 
 	return nil
@@ -172,6 +177,31 @@ func probeParakeetEndpoint(endpoint string, timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+func resolveParakeetTranscriptionEndpoint(endpoint string) (string, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", err
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("endpoint must be an absolute URL")
+	}
+
+	cleanPath := strings.TrimSpace(parsed.Path)
+	if cleanPath == "" || cleanPath == "/" {
+		parsed.Path = path.Join("/", "v1", "audio", "transcriptions")
+	} else {
+		parsed.Path = path.Clean(cleanPath)
+	}
+
+	return parsed.String(), nil
 }
 
 // Close closes the transcription service.
@@ -401,24 +431,57 @@ func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, sa
 }
 
 func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string, []SegmentInfo, float64, error) {
-	if strings.TrimSpace(s.config.Parakeet.Endpoint) == "" {
+	transcriptionURL, err := resolveParakeetTranscriptionEndpoint(s.config.Parakeet.Endpoint)
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("invalid parakeet endpoint: %v", err)
+	}
+
+	if transcriptionURL == "" {
 		return "", nil, 0, fmt.Errorf("parakeet endpoint is not configured")
 	}
 
-	audioBytes, err := os.ReadFile(audioPath)
+	audioFile, err := os.Open(audioPath)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to read audio for parakeet: %v", err)
 	}
+	defer audioFile.Close()
 
-	requestBody := parakeetTranscriptionRequest{
-		AudioBase64: base64.StdEncoding.EncodeToString(audioBytes),
-		SampleRate:  s.config.Audio.SampleRate,
-		Language:    strings.TrimSpace(s.config.Parakeet.Language),
+	request := parakeetTranscriptionRequest{
+		Model:    strings.TrimSpace(s.config.Parakeet.Model),
+		Language: strings.TrimSpace(s.config.Parakeet.Language),
+	}
+	if request.Model == "" {
+		request.Model = "parakeet-tdt-0.6b"
 	}
 
-	payload, err := json.Marshal(requestBody)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	filePart, err := writer.CreateFormFile("file", filepath.Base(audioPath))
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to encode parakeet request: %v", err)
+		return "", nil, 0, fmt.Errorf("failed to create multipart file part: %v", err)
+	}
+
+	if _, err := io.Copy(filePart, audioFile); err != nil {
+		return "", nil, 0, fmt.Errorf("failed to write multipart file part: %v", err)
+	}
+
+	if err := writer.WriteField("model", request.Model); err != nil {
+		return "", nil, 0, fmt.Errorf("failed to write model field: %v", err)
+	}
+
+	if request.Language != "" {
+		if err := writer.WriteField("language", request.Language); err != nil {
+			return "", nil, 0, fmt.Errorf("failed to write language field: %v", err)
+		}
+	}
+
+	if err := writer.WriteField("response_format", "verbose_json"); err != nil {
+		return "", nil, 0, fmt.Errorf("failed to write response_format field: %v", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return "", nil, 0, fmt.Errorf("failed to finalize multipart request: %v", err)
 	}
 
 	timeout := time.Duration(s.config.Parakeet.TimeoutSeconds) * time.Second
@@ -426,7 +489,7 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 		timeout = 30 * time.Second
 	}
 
-	resp, err := postParakeetJSON(s.config.Parakeet.Endpoint, payload, timeout)
+	resp, err := postParakeetMultipart(transcriptionURL, writer.FormDataContentType(), body.Bytes(), timeout)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to call parakeet endpoint: %v", err)
 	}
@@ -458,7 +521,7 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 	return parsed.Text, parsed.Segments, confidence, nil
 }
 
-func postParakeetJSON(endpoint string, payload []byte, timeout time.Duration) (*http.Response, error) {
+func postParakeetMultipart(endpoint, contentType string, payload []byte, timeout time.Duration) (*http.Response, error) {
 	client := &http.Client{Timeout: timeout}
 	body := bytes.NewReader(payload)
 	req, err := http.NewRequest(http.MethodPost, endpoint, body)
@@ -466,7 +529,7 @@ func postParakeetJSON(endpoint string, payload []byte, timeout time.Duration) (*
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.ContentLength = int64(len(payload))
 	return client.Do(req)
 }

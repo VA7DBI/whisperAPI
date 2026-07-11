@@ -265,29 +265,33 @@ Parakeet engine configuration (optional):
 
 ```yaml
 parakeet:
-  endpoint: "http://localhost:8081/transcribe"
+  endpoint: "http://localhost:5092"  # or full path: http://localhost:5092/v1/audio/transcriptions
   timeout_seconds: 30
   language: en
+  model: parakeet-tdt-0.6b
 ```
 
 If `parakeet.endpoint` is configured, whisperAPI performs a startup probe and fails fast when the endpoint is unreachable or returns a 5xx response.
 
-When `engine=parakeet` is sent, the API forwards the audio to the configured Parakeet endpoint as JSON:
+When `engine=parakeet` is sent, whisperAPI forwards the full audio clip using `multipart/form-data` to the Parakeet OpenAI-compatible transcription endpoint.
 
-```json
-{
-  "audio_base64": "...",
-  "sample_rate": 16000,
-  "language": "en"
-}
-```
+Endpoint behavior:
 
-Expected Parakeet response JSON:
+- If `parakeet.endpoint` is a base URL (for example `http://localhost:5092`), whisperAPI appends `/v1/audio/transcriptions`.
+- If `parakeet.endpoint` already includes a path, that path is used as-is.
+
+Forwarded form fields:
+
+- `file` (uploaded audio)
+- `model` (defaults to `parakeet-tdt-0.6b`)
+- `language` (optional)
+- `response_format=verbose_json`
+
+Expected Parakeet response JSON (OpenAI-compatible):
 
 ```json
 {
   "text": "Transcribed text content",
-  "confidence": 0.94,
   "segments": []
 }
 ```
