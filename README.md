@@ -68,6 +68,14 @@ Additional requirements for authentication:
    curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -o models/ggml-base.bin
    ```
 
+1. Optional: download local Parakeet backend models (for `engine=parakeet` deployments):
+
+  ```bash
+  make models        # int8 Parakeet models (default)
+  # or
+  make models-fp32   # fp32 Parakeet models
+  ```
+
 1. Install dependencies:
 
    ```bash
@@ -205,6 +213,12 @@ Notes:
 - Browser preflight (`OPTIONS`) requests are handled automatically when CORS is enabled.
 - If `allow_all_origins` is `false`, requests are only accepted from `allowed_origins`.
 - Keep `allow_all_origins: true` for development only.
+
+Model download notes:
+
+- `make models` downloads Parakeet int8 model artifacts to `./models`.
+- `make models-silero-vad` downloads `silero_vad.onnx` and verifies it with a pinned sha256 checksum.
+- These targets do not install ONNX Runtime system libraries.
 
 ## API Documentation
 
