@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"syscall"
@@ -53,6 +54,7 @@ var (
 // TranscriptionService encapsulates the whisper model and configuration.
 type TranscriptionService struct {
 	model                 whisper.Model
+	whisperMu             sync.Mutex
 	config                *config.Config
 	parakeetTranscriber   *asr.Transcriber
 	parakeetDisabled      bool
@@ -661,6 +663,11 @@ func postParakeetMultipart(endpoint, contentType string, payload []byte, timeout
 }
 
 func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string, []SegmentInfo, float64, error) {
+	// whisper.cpp context/state scheduling is not safe under concurrent calls
+	// with the current binding usage, so serialize Whisper requests.
+	s.whisperMu.Lock()
+	defer s.whisperMu.Unlock()
+
 	context, err := s.model.NewContext()
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to create whisper context: %v", err)
