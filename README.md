@@ -243,13 +243,16 @@ Request:
 - Method: POST
 - Content-Type: multipart/form-data
 - Form field: "audio" (file)
+- Optional form field: "engine" (string, defaults to "whisper")
 - Supported formats: WAV, OGG/Vorbis, OGG/Opus
+- Supported engines: whisper
 
 Response:
 
 ```json
 {
   "text": "Transcribed text content",
+  "engine": "whisper",
   "audio_info": {
     "format": "WAV",
     "codec": "PCM",

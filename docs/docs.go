@@ -68,6 +68,15 @@ const docTemplate = `{
                         "name": "audio",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "whisper"
+                        ],
+                        "type": "string",
+                        "description": "Speech-to-text engine to use (default: whisper)",
+                        "name": "engine",
+                        "in": "formData"
                     }
                 ],
                 "responses": {

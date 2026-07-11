@@ -141,6 +141,12 @@ paths:
         name: audio
         required: true
         type: file
+      - description: 'Speech-to-text engine to use (default: whisper)'
+        enum:
+        - whisper
+        in: formData
+        name: engine
+        type: string
       produces:
       - application/json
       responses:

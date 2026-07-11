@@ -31,6 +31,7 @@ const (
 	// Time-related constants
 	WhisperSampleLength  = 0.02 // Each sample is 20ms in Whisper
 	NanosecondsPerSecond = 1_000_000_000
+	EngineWhisper        = "whisper"
 )
 
 // OGG format detection patterns
@@ -65,6 +66,7 @@ type SegmentInfo struct {
 // TranscriptionResponse represents the transcription response.
 type TranscriptionResponse struct {
 	Text           string              `json:"text"`
+	Engine         string              `json:"engine"`
 	Segments       []SegmentInfo       `json:"segments"`
 	Duration       float64             `json:"duration_seconds"`
 	ProcessingTime float64             `json:"processing_time_seconds"`
@@ -94,6 +96,10 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+var supportedTranscriptionEngines = map[string]struct{}{
+	EngineWhisper: {},
+}
+
 // NewTranscriptionService creates a new transcription service.
 func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) {
 	model, err := whisper.New(cfg.Whisper.ModelPath)
@@ -120,6 +126,7 @@ func (s *TranscriptionService) Close() {
 //	@Accept			multipart/form-data
 //	@Produce		json
 //	@Param			audio	formData	file					true	"Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)"
+//	@Param			engine	formData	string				false	"Speech-to-text engine to use (default: whisper)" Enums(whisper)
 //	@Success		200		{object}	TranscriptionResponse	"Successful transcription with metadata"
 //	@Failure		400		{object}	ErrorResponse			"Invalid request (missing file, file too large)"
 //	@Failure		401		{object}	ErrorResponse			"Unauthorized (invalid or missing API key)"
@@ -127,6 +134,13 @@ func (s *TranscriptionService) Close() {
 //	@Security		ApiKeyAuth
 //	@Router			/transcribe [post]
 func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
+	engine, err := parseTranscriptionEngine(c.PostForm("engine"))
+	if err != nil {
+		metrics.TranscriptionRequests.WithLabelValues("error", "unknown").Inc()
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
 	// Get file extension for metrics labeling
 	file, err := c.FormFile("audio")
 	if err != nil {
@@ -179,20 +193,6 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 		return
 	}
 
-	// Process the audio file
-	context, err := s.model.NewContext()
-	if err != nil {
-		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create whisper context"})
-		return
-	}
-
-	// Set up callbacks for collecting segments
-	text := ""
-	var totalProb float64
-	var tokenCount int
-	var segments []SegmentInfo
-
 	// Convert the audio file to samples (implementation needed)
 	samples, err := s.convertAudioToSamples(tmpFile.Name())
 	if err != nil {
@@ -204,41 +204,12 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	// Calculate actual duration from samples
 	duration := float64(len(samples)) / float64(s.config.Audio.SampleRate)
 
-	// Process using callbacks with correct types
-	segmentCallback := func(seg whisper.Segment) {
-		text += seg.Text
-
-		// Create segment info with tokens
-		segInfo := SegmentInfo{
-			Text:      seg.Text,
-			StartTime: durationToSeconds(seg.Start),
-			EndTime:   durationToSeconds(seg.End),
-			Tokens:    make([]TokenInfo, 0, len(seg.Tokens)),
-		}
-
-		// Collect token information
-		for _, token := range seg.Tokens {
-			tokenInfo := TokenInfo{
-				Text:        token.Text,
-				Probability: float64(token.P),
-				StartTime:   durationToSeconds(token.Start),
-				EndTime:     durationToSeconds(token.End),
-			}
-			segInfo.Tokens = append(segInfo.Tokens, tokenInfo)
-
-			totalProb += float64(token.P)
-			tokenCount++
-		}
-
-		segments = append(segments, segInfo)
-	}
-
 	// Track CPU time using rusage only
 	var rusageStart, rusageEnd syscall.Rusage
 	syscall.Getrusage(syscall.RUSAGE_SELF, &rusageStart)
 
-	// Process audio
-	if err := context.Process(samples, segmentCallback, nil); err != nil {
+	text, segments, confidence, err := s.transcribeWithEngine(engine, samples)
+	if err != nil {
 		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to process audio: %v", err)})
 		return
@@ -256,12 +227,6 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	metrics.CPUTime.WithLabelValues("system").Observe(cpuTimeSystem.Seconds())
 	metrics.CPUTime.WithLabelValues("total").Observe(cpuTimeTotal.Seconds())
 
-	// Calculate average confidence across all tokens
-	confidence := 0.0
-	if tokenCount > 0 {
-		confidence = totalProb / float64(tokenCount)
-	}
-
 	// Calculate final memory stats
 	runtime.GC() // Run GC after processing
 	runtime.ReadMemStats(&memStats)
@@ -270,6 +235,7 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 
 	response := TranscriptionResponse{
 		Text:           text,
+		Engine:         engine,
 		Segments:       segments,
 		Duration:       duration,
 		ProcessingTime: time.Since(startTime).Seconds(),
@@ -306,6 +272,77 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	metrics.TranscriptionRequests.WithLabelValues("success", format).Inc()
 
 	c.JSON(http.StatusOK, response)
+}
+
+func parseTranscriptionEngine(raw string) (string, error) {
+	engine := strings.TrimSpace(strings.ToLower(raw))
+	if engine == "" {
+		return EngineWhisper, nil
+	}
+
+	if _, ok := supportedTranscriptionEngines[engine]; !ok {
+		return "", fmt.Errorf("unsupported engine: %s (supported engines: whisper)", engine)
+	}
+
+	return engine, nil
+}
+
+func (s *TranscriptionService) transcribeWithEngine(engine string, samples []float32) (string, []SegmentInfo, float64, error) {
+	switch engine {
+	case EngineWhisper:
+		return s.transcribeWithWhisper(samples)
+	default:
+		return "", nil, 0, fmt.Errorf("unsupported engine: %s", engine)
+	}
+}
+
+func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string, []SegmentInfo, float64, error) {
+	context, err := s.model.NewContext()
+	if err != nil {
+		return "", nil, 0, fmt.Errorf("failed to create whisper context: %v", err)
+	}
+
+	text := ""
+	var totalProb float64
+	var tokenCount int
+	segments := make([]SegmentInfo, 0)
+
+	segmentCallback := func(seg whisper.Segment) {
+		text += seg.Text
+
+		segInfo := SegmentInfo{
+			Text:      seg.Text,
+			StartTime: durationToSeconds(seg.Start),
+			EndTime:   durationToSeconds(seg.End),
+			Tokens:    make([]TokenInfo, 0, len(seg.Tokens)),
+		}
+
+		for _, token := range seg.Tokens {
+			tokenInfo := TokenInfo{
+				Text:        token.Text,
+				Probability: float64(token.P),
+				StartTime:   durationToSeconds(token.Start),
+				EndTime:     durationToSeconds(token.End),
+			}
+			segInfo.Tokens = append(segInfo.Tokens, tokenInfo)
+
+			totalProb += float64(token.P)
+			tokenCount++
+		}
+
+		segments = append(segments, segInfo)
+	}
+
+	if err := context.Process(samples, segmentCallback, nil); err != nil {
+		return "", nil, 0, err
+	}
+
+	confidence := 0.0
+	if tokenCount > 0 {
+		confidence = totalProb / float64(tokenCount)
+	}
+
+	return text, segments, confidence, nil
 }
 
 // handleError adds error metrics in error handlers.
