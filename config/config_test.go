@@ -80,7 +80,7 @@ func TestDefaultValues(t *testing.T) {
 	assert.Equal(t, "models/ggml-base.bin", cfg.Whisper.ModelPath)
 	assert.Equal(t, 30, cfg.Parakeet.TimeoutSeconds)
 	assert.Equal(t, "parakeet-tdt-0.6b", cfg.Parakeet.Model)
-	assert.Equal(t, "parakeet", cfg.Parakeet.Embedded.BinaryPath)
+	assert.Equal(t, "", cfg.Parakeet.Embedded.BinaryPath)
 	assert.Equal(t, "models", cfg.Parakeet.Embedded.ModelsDir)
 	assert.Equal(t, 5092, cfg.Parakeet.Embedded.Port)
 	assert.Equal(t, 2, cfg.Parakeet.Embedded.Workers)

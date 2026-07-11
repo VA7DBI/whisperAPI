@@ -271,7 +271,7 @@ parakeet:
   model: parakeet-tdt-0.6b
   embedded:
     enabled: true
-    binary_path: parakeet
+    binary_path: ""  # Optional override, otherwise auto-detects parakeet in PATH, ./parakeet, ./bin/parakeet
     models_dir: models
     port: 5092
     workers: 2

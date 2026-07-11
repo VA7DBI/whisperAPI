@@ -120,9 +120,6 @@ func LoadConfig(filename string) (*Config, error) {
 	if config.Parakeet.Model == "" {
 		config.Parakeet.Model = "parakeet-tdt-0.6b"
 	}
-	if config.Parakeet.Embedded.BinaryPath == "" {
-		config.Parakeet.Embedded.BinaryPath = "parakeet"
-	}
 	if config.Parakeet.Embedded.ModelsDir == "" {
 		config.Parakeet.Embedded.ModelsDir = "models"
 	}

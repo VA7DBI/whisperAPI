@@ -162,9 +162,9 @@ func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
 		return nil, nil
 	}
 
-	binaryPath := strings.TrimSpace(cfg.Parakeet.Embedded.BinaryPath)
-	if binaryPath == "" {
-		binaryPath = "parakeet"
+	binaryPath, err := resolveEmbeddedParakeetBinaryPath(strings.TrimSpace(cfg.Parakeet.Embedded.BinaryPath))
+	if err != nil {
+		return nil, err
 	}
 
 	modelsDir := strings.TrimSpace(cfg.Parakeet.Embedded.ModelsDir)
@@ -197,6 +197,48 @@ func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
 	cfg.Parakeet.Endpoint = fmt.Sprintf("http://127.0.0.1:%d", port)
 
 	return cmd, nil
+}
+
+func resolveEmbeddedParakeetBinaryPath(configuredPath string) (string, error) {
+	if configuredPath != "" {
+		if _, err := os.Stat(configuredPath); err == nil {
+			return configuredPath, nil
+		}
+
+		if found, err := exec.LookPath(configuredPath); err == nil {
+			return found, nil
+		}
+
+		return "", fmt.Errorf("failed to start embedded parakeet process: parakeet binary not found at configured path %q", configuredPath)
+	}
+
+	candidates := []string{
+		"parakeet",
+		filepath.Join(".", "parakeet"),
+		filepath.Join(".", "bin", "parakeet"),
+	}
+
+	if runtime.GOOS == "windows" {
+		candidates = append(candidates,
+			"parakeet.exe",
+			filepath.Join(".", "parakeet.exe"),
+			filepath.Join(".", "bin", "parakeet.exe"),
+		)
+	}
+
+	for _, candidate := range candidates {
+		if found, err := exec.LookPath(candidate); err == nil {
+			return found, nil
+		}
+
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf(
+		"failed to start embedded parakeet process: no parakeet binary found. Install it in PATH or set parakeet.embedded.binary_path",
+	)
 }
 
 func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
