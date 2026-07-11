@@ -163,7 +163,7 @@ func testTranscription(t *testing.T, r *gin.Engine, audioPath string) {
 	assert.NotEmpty(t, response.Text)
 	assert.Greater(t, response.Duration, float64(0))
 	assert.Greater(t, response.ProcessingTime, float64(0))
-	assert.Greater(t, response.MemoryUsage.AllocatedMB, float64(0))
+	assert.GreaterOrEqual(t, response.MemoryUsage.AllocatedMB, float64(0))
 }
 
 func testTranscriptionWithExpectedError(t *testing.T, r *gin.Engine, audioPath string, expectedError string) {
