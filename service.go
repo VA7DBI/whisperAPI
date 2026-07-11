@@ -212,12 +212,12 @@ func (s *TranscriptionService) Close() {
 // TranscribeHandler handles the transcription request.
 //
 //	@Summary		Transcribe audio to text
-//	@Description	Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
+//	@Description	Converts audio file to text. Use engine=whisper (default) for local whisper.cpp processing, or engine=parakeet to forward the file to a Parakeet OpenAI-compatible endpoint.
 //	@Tags			transcription
 //	@Accept			multipart/form-data
 //	@Produce		json
 //	@Param			audio	formData	file					true	"Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)"
-//	@Param			engine	formData	string				false	"Speech-to-text engine to use (default: whisper)" Enums(whisper,parakeet)
+//	@Param			engine	formData	string				false	"Speech-to-text engine to use: whisper (default) or parakeet" Enums(whisper,parakeet) default(whisper)
 //	@Success		200		{object}	TranscriptionResponse	"Successful transcription with metadata"
 //	@Failure		400		{object}	ErrorResponse			"Invalid request (missing file, file too large)"
 //	@Failure		401		{object}	ErrorResponse			"Unauthorized (invalid or missing API key)"

@@ -50,7 +50,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Converts audio file to text using Whisper AI model. Supports WAV, MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.",
+                "description": "Converts audio file to text. Use engine=whisper (default) for local whisper.cpp processing, or engine=parakeet to forward the file to a Parakeet OpenAI-compatible endpoint.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -74,8 +74,9 @@ const docTemplate = `{
                             "whisper",
                             "parakeet"
                         ],
+                        "default": "whisper",
                         "type": "string",
-                        "description": "Speech-to-text engine to use (default: whisper)",
+                        "description": "Speech-to-text engine to use: whisper (default) or parakeet",
                         "name": "engine",
                         "in": "formData"
                     }
@@ -245,6 +246,9 @@ const docTemplate = `{
                 },
                 "duration_seconds": {
                     "type": "number"
+                },
+                "engine": {
+                    "type": "string"
                 },
                 "memory_usage": {
                     "$ref": "#/definitions/main.MemStats"

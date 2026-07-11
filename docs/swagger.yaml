@@ -87,6 +87,8 @@ definitions:
         type: number
       duration_seconds:
         type: number
+      engine:
+        type: string
       memory_usage:
         $ref: '#/definitions/main.MemStats'
       processing_time_seconds:
@@ -132,8 +134,9 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Converts audio file to text using Whisper AI model. Supports WAV,
-        MP3, OGG (Vorbis), Opus, FLAC, AAC (.aac/.m4a), and Speex (.spx) formats.
+      description: Converts audio file to text. Use engine=whisper (default) for
+        local whisper.cpp processing, or engine=parakeet to forward the file to
+        a Parakeet OpenAI-compatible endpoint.
       parameters:
       - description: Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC,
           or Speex format)
@@ -141,7 +144,8 @@ paths:
         name: audio
         required: true
         type: file
-      - description: 'Speech-to-text engine to use (default: whisper)'
+      - description: 'Speech-to-text engine to use: whisper (default) or parakeet'
+        default: whisper
         enum:
         - whisper
         - parakeet
