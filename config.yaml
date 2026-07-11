@@ -11,15 +11,13 @@ whisper:
   language: en
 
 parakeet:
-  endpoint: ""      # Optional HTTP endpoint for Parakeet transcription backend
+  endpoint: ""      # Optional external HTTP endpoint. Leave empty for in-process embedded runtime.
   timeout_seconds: 30
   language: en
   model: parakeet-tdt-0.6b
   embedded:
     enabled: true
-    binary_path: ""   # Optional: absolute/relative path. Empty = auto-detect PATH, ./parakeet, ./bin/parakeet
     models_dir: models
-    port: 5092
     workers: 2
 
 audio:

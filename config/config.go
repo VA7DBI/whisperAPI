@@ -32,11 +32,9 @@ type Config struct {
 		Language       string `yaml:"language"`
 		Model          string `yaml:"model"`
 		Embedded       struct {
-			Enabled    bool   `yaml:"enabled"`
-			BinaryPath string `yaml:"binary_path"`
-			ModelsDir  string `yaml:"models_dir"`
-			Port       int    `yaml:"port"`
-			Workers    int    `yaml:"workers"`
+			Enabled   bool   `yaml:"enabled"`
+			ModelsDir string `yaml:"models_dir"`
+			Workers   int    `yaml:"workers"`
 		} `yaml:"embedded"`
 	} `yaml:"parakeet"`
 
@@ -122,9 +120,6 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if config.Parakeet.Embedded.ModelsDir == "" {
 		config.Parakeet.Embedded.ModelsDir = "models"
-	}
-	if config.Parakeet.Embedded.Port == 0 {
-		config.Parakeet.Embedded.Port = 5092
 	}
 	if config.Parakeet.Embedded.Workers == 0 {
 		config.Parakeet.Embedded.Workers = 2

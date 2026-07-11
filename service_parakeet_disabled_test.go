@@ -9,19 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIsParakeetBinaryNotFoundError(t *testing.T) {
-	assert.False(t, isParakeetBinaryNotFoundError(assert.AnError))
-	assert.True(t, isParakeetBinaryNotFoundError(
-		errorString("no parakeet binary found. install it in PATH"),
-	))
-	assert.True(t, isParakeetBinaryNotFoundError(
-		errorString("parakeet binary not found at configured path \"/tmp/parakeet\""),
-	))
-	assert.False(t, isParakeetBinaryNotFoundError(
-		errorString("failed to start embedded parakeet process: permission denied"),
-	))
-}
-
 func TestTranscribeWithEngine_ParakeetDisabled(t *testing.T) {
 	s := &TranscriptionService{
 		parakeetDisabled:      true,
@@ -34,10 +21,4 @@ func TestTranscribeWithEngine_ParakeetDisabled(t *testing.T) {
 	assert.Empty(t, segments)
 	assert.Equal(t, float64(0), confidence)
 	assert.Contains(t, err.Error(), "parakeet engine is disabled")
-}
-
-type errorString string
-
-func (e errorString) Error() string {
-	return string(e)
 }

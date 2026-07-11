@@ -265,23 +265,22 @@ Parakeet engine configuration (optional):
 
 ```yaml
 parakeet:
-  endpoint: ""  # Leave empty to use embedded managed mode below
+  endpoint: ""  # Optional external endpoint. Leave empty to use in-process embedded runtime.
   timeout_seconds: 30
   language: en
   model: parakeet-tdt-0.6b
   embedded:
     enabled: true
-    binary_path: ""  # Optional override, otherwise auto-detects parakeet in PATH, ./parakeet, ./bin/parakeet
     models_dir: models
-    port: 5092
     workers: 2
 ```
 
 Embedded mode behavior:
 
-- If `parakeet.endpoint` is empty and `parakeet.embedded.enabled` is true, whisperAPI starts a managed local Parakeet worker process automatically at startup.
+- If `parakeet.endpoint` is empty and `parakeet.embedded.enabled` is true, whisperAPI initializes an in-process ONNX Parakeet transcriber at startup.
 - If `parakeet.endpoint` is set, whisperAPI uses that endpoint directly.
-- In both cases, whisperAPI probes the resolved endpoint at startup and fails fast if unreachable.
+- Embedded initialization failures do not stop whisperAPI startup; the Parakeet engine is disabled and Whisper remains available.
+- External endpoint mode still probes at startup and fails fast if unreachable.
 
 When `engine=parakeet` is sent, whisperAPI forwards the full audio clip using `multipart/form-data` to the Parakeet OpenAI-compatible transcription endpoint.
 

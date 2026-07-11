@@ -5,7 +5,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,13 +15,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"syscall"
@@ -27,6 +26,7 @@ import (
 	"github.com/VA7DBI/whisperAPI/audio"
 	"github.com/VA7DBI/whisperAPI/config"
 	"github.com/VA7DBI/whisperAPI/metrics"
+	"github.com/VA7DBI/whisperAPI/parakeet/asr"
 	"github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
 	"github.com/gin-gonic/gin"
 	"github.com/go-audio/wav"
@@ -54,8 +54,7 @@ var (
 type TranscriptionService struct {
 	model                 whisper.Model
 	config                *config.Config
-	parakeetProcess       *exec.Cmd
-	parakeetProcessLock   sync.Mutex
+	parakeetTranscriber   *asr.Transcriber
 	parakeetDisabled      bool
 	parakeetDisableReason string
 }
@@ -135,38 +134,46 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 
 	parakeetDisabled := false
 	parakeetDisableReason := ""
+	parakeetTranscriber := (*asr.Transcriber)(nil)
 
-	process, err := startEmbeddedParakeetIfEnabled(cfg)
+	parakeetTranscriber, err = startEmbeddedParakeetIfEnabled(cfg)
 	if err != nil {
-		if isParakeetBinaryNotFoundError(err) {
-			parakeetDisabled = true
-			parakeetDisableReason = err.Error()
-			log.Printf("warning: %s; parakeet engine disabled", err.Error())
-		} else {
+		parakeetDisabled = true
+		parakeetDisableReason = err.Error()
+		log.Printf("warning: %s; parakeet engine disabled", err.Error())
+	}
+
+	if parakeetTranscriber == nil && strings.TrimSpace(cfg.Parakeet.Endpoint) == "" {
+		parakeetDisabled = true
+		if strings.TrimSpace(parakeetDisableReason) == "" {
+			parakeetDisableReason = "embedded parakeet is disabled and no parakeet endpoint is configured"
+		}
+	}
+
+	if strings.TrimSpace(cfg.Parakeet.Endpoint) != "" {
+		if err := validateConfiguredParakeetEndpoint(cfg); err != nil {
+			if parakeetTranscriber != nil {
+				parakeetTranscriber.Close()
+			}
 			model.Close()
 			return nil, err
 		}
 	}
 
-	if err := validateConfiguredParakeetEndpoint(cfg); err != nil {
-		if process != nil {
-			_ = process.Process.Kill()
-			_, _ = process.Process.Wait()
-		}
-		model.Close()
-		return nil, err
+	if parakeetTranscriber != nil {
+		cfg.Parakeet.Endpoint = ""
 	}
 
 	return &TranscriptionService{
 		model:                 model,
 		config:                cfg,
-		parakeetProcess:       process,
+		parakeetTranscriber:   parakeetTranscriber,
 		parakeetDisabled:      parakeetDisabled,
 		parakeetDisableReason: parakeetDisableReason,
 	}, nil
 }
 
-func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
+func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*asr.Transcriber, error) {
 	if strings.TrimSpace(cfg.Parakeet.Endpoint) != "" {
 		return nil, nil
 	}
@@ -175,19 +182,9 @@ func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
 		return nil, nil
 	}
 
-	binaryPath, err := resolveEmbeddedParakeetBinaryPath(strings.TrimSpace(cfg.Parakeet.Embedded.BinaryPath))
-	if err != nil {
-		return nil, err
-	}
-
 	modelsDir := strings.TrimSpace(cfg.Parakeet.Embedded.ModelsDir)
 	if modelsDir == "" {
 		modelsDir = "models"
-	}
-
-	port := cfg.Parakeet.Embedded.Port
-	if port <= 0 {
-		port = 5092
 	}
 
 	workers := cfg.Parakeet.Embedded.Workers
@@ -195,70 +192,16 @@ func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
 		workers = 2
 	}
 
-	cmd := exec.Command(binaryPath,
-		"-port", strconv.Itoa(port),
-		"-models", modelsDir,
-		"-workers", strconv.Itoa(workers),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start embedded parakeet process: %v", err)
+	transcriber, err := asr.NewTranscriber(modelsDir, workers, asr.Options{
+		FFmpeg: asr.FFmpegConfig{Enabled: true, Timeout: 60 * time.Second},
+		Chunk:  asr.ChunkConfig{Enabled: false},
+		GPU:    asr.GPUConfig{Provider: asr.ProviderCPU},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize embedded parakeet runtime: %v", err)
 	}
 
-	cfg.Parakeet.Endpoint = fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	return cmd, nil
-}
-
-func resolveEmbeddedParakeetBinaryPath(configuredPath string) (string, error) {
-	if configuredPath != "" {
-		if _, err := os.Stat(configuredPath); err == nil {
-			return configuredPath, nil
-		}
-
-		if found, err := exec.LookPath(configuredPath); err == nil {
-			return found, nil
-		}
-
-		return "", fmt.Errorf("parakeet binary not found at configured path %q", configuredPath)
-	}
-
-	candidates := []string{
-		"parakeet",
-		filepath.Join(".", "parakeet"),
-		filepath.Join(".", "bin", "parakeet"),
-	}
-
-	if runtime.GOOS == "windows" {
-		candidates = append(candidates,
-			"parakeet.exe",
-			filepath.Join(".", "parakeet.exe"),
-			filepath.Join(".", "bin", "parakeet.exe"),
-		)
-	}
-
-	for _, candidate := range candidates {
-		if found, err := exec.LookPath(candidate); err == nil {
-			return found, nil
-		}
-
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-	}
-
-	return "", fmt.Errorf("no parakeet binary found. Install it in PATH or set parakeet.embedded.binary_path")
-}
-
-func isParakeetBinaryNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "parakeet binary not found") || strings.Contains(message, "no parakeet binary found")
+	return transcriber, nil
 }
 
 func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
@@ -331,17 +274,11 @@ func resolveParakeetTranscriptionEndpoint(endpoint string) (string, error) {
 
 // Close closes the transcription service.
 func (s *TranscriptionService) Close() {
-	s.model.Close()
-
-	s.parakeetProcessLock.Lock()
-	defer s.parakeetProcessLock.Unlock()
-
-	if s.parakeetProcess != nil && s.parakeetProcess.Process != nil {
-		if err := s.parakeetProcess.Process.Kill(); err != nil {
-			log.Printf("failed to stop embedded parakeet process: %v", err)
-		}
-		_, _ = s.parakeetProcess.Process.Wait()
+	if s.parakeetTranscriber != nil {
+		s.parakeetTranscriber.Close()
 	}
+
+	s.model.Close()
 }
 
 // TranscribeHandler handles the transcription request.
@@ -573,6 +510,29 @@ func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, sa
 }
 
 func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string, []SegmentInfo, float64, error) {
+	if s.parakeetTranscriber != nil {
+		audioData, err := os.ReadFile(audioPath)
+		if err != nil {
+			return "", nil, 0, fmt.Errorf("failed to read audio for embedded parakeet: %v", err)
+		}
+
+		format := strings.TrimPrefix(strings.ToLower(filepath.Ext(audioPath)), ".")
+		text, err := s.parakeetTranscriber.Transcribe(
+			context.Background(),
+			audioData,
+			format,
+			strings.TrimSpace(s.config.Parakeet.Language),
+		)
+		if err != nil {
+			if errors.Is(err, asr.ErrUnsupportedAudio) {
+				return "", nil, 0, fmt.Errorf("unsupported audio format for embedded parakeet: %v", err)
+			}
+			return "", nil, 0, fmt.Errorf("embedded parakeet transcription failed: %v", err)
+		}
+
+		return text, nil, 0, nil
+	}
+
 	transcriptionURL, err := resolveParakeetTranscriptionEndpoint(s.config.Parakeet.Endpoint)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("invalid parakeet endpoint: %v", err)
