@@ -185,6 +185,7 @@ type Transcriber struct {
 	vocab              map[int]string
 	vocabSize          int
 	blankIdx           int
+	startIdx           int
 	maxTokensPerStep   int
 	chunkFrames        int64
 	overlapFrames      int64
@@ -287,6 +288,7 @@ func NewTranscriber(modelsDir string, workers int, opts Options) (*Transcriber, 
 	t := &Transcriber{
 		maxTokensPerStep: 10,
 		blankIdx:         8192,
+		startIdx:         -1,
 		ffmpeg:           newFFmpegConverter(opts.FFmpeg),
 	}
 
@@ -492,11 +494,14 @@ func (t *Transcriber) loadVocab(path string) error {
 		if token == "<blk>" {
 			t.blankIdx = id
 		}
+		if token == "<|startoftranscript|>" {
+			t.startIdx = id
+		}
 	}
 	t.vocabSize = len(t.vocab)
 
 	if DebugMode {
-		slog.Debug("vocab loaded", "tokens", t.vocabSize, "blankIdx", t.blankIdx)
+		slog.Debug("vocab loaded", "tokens", t.vocabSize, "blankIdx", t.blankIdx, "startIdx", t.startIdx)
 	}
 
 	return scanner.Err()
@@ -795,6 +800,9 @@ func (t *Transcriber) tdtDecode(ctx context.Context, encoderOut []float32, encod
 	timestep := int64(0)
 	emittedTokens := 0
 	prevToken := t.blankIdx
+	if t.startIdx >= 0 {
+		prevToken = t.startIdx
+	}
 
 	// emitText streams one token's printable text, skipping special <...> tokens.
 	emitText := func(id int) {

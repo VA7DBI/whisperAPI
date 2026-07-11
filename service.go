@@ -453,6 +453,10 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	runtime.ReadMemStats(&memStats)
 
 	const bytesToMB = 1024 * 1024
+	allocatedDelta := int64(memStats.Alloc) - int64(startAlloc)
+	if allocatedDelta < 0 {
+		allocatedDelta = 0
+	}
 
 	response := TranscriptionResponse{
 		Text:           text,
@@ -463,7 +467,7 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 		Confidence:     confidence,
 		AudioInfo:      audioInfo,
 		MemoryUsage: MemStats{
-			AllocatedMB:   float64(memStats.Alloc-startAlloc) / bytesToMB,
+			AllocatedMB:   float64(allocatedDelta) / bytesToMB,
 			TotalAllocMB:  float64(memStats.TotalAlloc) / bytesToMB,
 			SystemMB:      float64(memStats.Sys) / bytesToMB,
 			HeapInUseMB:   float64(memStats.HeapInuse) / bytesToMB,
