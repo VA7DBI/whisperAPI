@@ -48,5 +48,5 @@ func TestValidateConfiguredParakeetEndpoint_InvalidEndpoint(t *testing.T) {
 
 	err := validateConfiguredParakeetEndpoint(cfg)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "startup probe failed")
+	assert.Contains(t, err.Error(), "invalid parakeet endpoint")
 }
