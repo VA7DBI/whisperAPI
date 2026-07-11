@@ -454,8 +454,8 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 		request.Model = "parakeet-tdt-0.6b"
 	}
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
+	var multipartBody bytes.Buffer
+	writer := multipart.NewWriter(&multipartBody)
 
 	filePart, err := writer.CreateFormFile("file", filepath.Base(audioPath))
 	if err != nil {
@@ -489,23 +489,23 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 		timeout = 30 * time.Second
 	}
 
-	resp, err := postParakeetMultipart(transcriptionURL, writer.FormDataContentType(), body.Bytes(), timeout)
+	resp, err := postParakeetMultipart(transcriptionURL, writer.FormDataContentType(), multipartBody.Bytes(), timeout)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to call parakeet endpoint: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to read parakeet response: %v", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", nil, 0, fmt.Errorf("parakeet endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return "", nil, 0, fmt.Errorf("parakeet endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
 	}
 
 	var parsed parakeetTranscriptionResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		return "", nil, 0, fmt.Errorf("failed to decode parakeet response: %v", err)
 	}
 
