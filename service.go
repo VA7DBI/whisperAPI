@@ -52,10 +52,12 @@ var (
 
 // TranscriptionService encapsulates the whisper model and configuration.
 type TranscriptionService struct {
-	model               whisper.Model
-	config              *config.Config
-	parakeetProcess     *exec.Cmd
-	parakeetProcessLock sync.Mutex
+	model                 whisper.Model
+	config                *config.Config
+	parakeetProcess       *exec.Cmd
+	parakeetProcessLock   sync.Mutex
+	parakeetDisabled      bool
+	parakeetDisableReason string
 }
 
 // TokenInfo represents token information.
@@ -131,10 +133,19 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 		return nil, fmt.Errorf("failed to load whisper model: %v", err)
 	}
 
+	parakeetDisabled := false
+	parakeetDisableReason := ""
+
 	process, err := startEmbeddedParakeetIfEnabled(cfg)
 	if err != nil {
-		model.Close()
-		return nil, err
+		if isParakeetBinaryNotFoundError(err) {
+			parakeetDisabled = true
+			parakeetDisableReason = err.Error()
+			log.Printf("warning: %s; parakeet engine disabled", err.Error())
+		} else {
+			model.Close()
+			return nil, err
+		}
 	}
 
 	if err := validateConfiguredParakeetEndpoint(cfg); err != nil {
@@ -147,9 +158,11 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 	}
 
 	return &TranscriptionService{
-		model:           model,
-		config:          cfg,
-		parakeetProcess: process,
+		model:                 model,
+		config:                cfg,
+		parakeetProcess:       process,
+		parakeetDisabled:      parakeetDisabled,
+		parakeetDisableReason: parakeetDisableReason,
 	}, nil
 }
 
@@ -209,7 +222,7 @@ func resolveEmbeddedParakeetBinaryPath(configuredPath string) (string, error) {
 			return found, nil
 		}
 
-		return "", fmt.Errorf("failed to start embedded parakeet process: parakeet binary not found at configured path %q", configuredPath)
+		return "", fmt.Errorf("parakeet binary not found at configured path %q", configuredPath)
 	}
 
 	candidates := []string{
@@ -236,9 +249,16 @@ func resolveEmbeddedParakeetBinaryPath(configuredPath string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf(
-		"failed to start embedded parakeet process: no parakeet binary found. Install it in PATH or set parakeet.embedded.binary_path",
-	)
+	return "", fmt.Errorf("no parakeet binary found. Install it in PATH or set parakeet.embedded.binary_path")
+}
+
+func isParakeetBinaryNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "parakeet binary not found") || strings.Contains(message, "no parakeet binary found")
 }
 
 func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
@@ -539,6 +559,13 @@ func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, sa
 		}
 		return s.transcribeWithWhisper(samples)
 	case EngineParakeet:
+		if s.parakeetDisabled {
+			reason := strings.TrimSpace(s.parakeetDisableReason)
+			if reason == "" {
+				reason = "parakeet is not available"
+			}
+			return "", nil, 0, fmt.Errorf("parakeet engine is disabled: %s", reason)
+		}
 		return s.transcribeWithParakeet(audioPath)
 	default:
 		return "", nil, 0, fmt.Errorf("unsupported engine: %s", engine)
