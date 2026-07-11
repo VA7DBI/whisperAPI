@@ -666,12 +666,31 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 		return "", nil, 0, fmt.Errorf("failed to create whisper context: %v", err)
 	}
 
+	language := strings.TrimSpace(s.config.Whisper.Language)
+	if language != "" {
+		if err := context.SetLanguage(language); err != nil {
+			return "", nil, 0, fmt.Errorf("failed to set whisper language %q: %v", language, err)
+		}
+	}
+
 	text := ""
 	var totalProb float64
 	var tokenCount int
 	segments := make([]SegmentInfo, 0)
 
-	segmentCallback := func(seg whisper.Segment) {
+	if err := context.Process(samples, nil, nil); err != nil {
+		return "", nil, 0, err
+	}
+
+	for {
+		seg, err := context.NextSegment()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", nil, 0, err
+		}
+
 		text += seg.Text
 
 		segInfo := SegmentInfo{
@@ -695,10 +714,6 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 		}
 
 		segments = append(segments, segInfo)
-	}
-
-	if err := context.Process(samples, segmentCallback, nil); err != nil {
-		return "", nil, 0, err
 	}
 
 	confidence := 0.0

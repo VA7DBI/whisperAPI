@@ -183,6 +183,7 @@ type GPUConfig struct {
 type Transcriber struct {
 	config             Config
 	vocab              map[int]string
+	langTokenID        map[string]int
 	vocabSize          int
 	blankIdx           int
 	startIdx           int
@@ -477,6 +478,7 @@ func (t *Transcriber) loadVocab(path string) error {
 	defer file.Close()
 
 	t.vocab = make(map[int]string)
+	t.langTokenID = make(map[string]int)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -489,6 +491,7 @@ func (t *Transcriber) loadVocab(path string) error {
 		if err != nil {
 			continue
 		}
+		rawToken := token
 		token = strings.ReplaceAll(token, "▁", " ")
 		t.vocab[id] = token
 		if token == "<blk>" {
@@ -497,11 +500,17 @@ func (t *Transcriber) loadVocab(path string) error {
 		if token == "<|startoftranscript|>" {
 			t.startIdx = id
 		}
+		if strings.HasPrefix(rawToken, "<|") && strings.HasSuffix(rawToken, "|>") {
+			code := strings.TrimSuffix(strings.TrimPrefix(rawToken, "<|"), "|>")
+			if len(code) == 2 {
+				t.langTokenID[code] = id
+			}
+		}
 	}
 	t.vocabSize = len(t.vocab)
 
 	if DebugMode {
-		slog.Debug("vocab loaded", "tokens", t.vocabSize, "blankIdx", t.blankIdx, "startIdx", t.startIdx)
+		slog.Debug("vocab loaded", "tokens", t.vocabSize, "blankIdx", t.blankIdx, "startIdx", t.startIdx, "langTokens", len(t.langTokenID))
 	}
 
 	return scanner.Err()
@@ -595,6 +604,8 @@ func (t *Transcriber) transcribe(ctx context.Context, audioData []byte, format, 
 		slog.Debug("chunk plan", "windows", len(plan), "melFrames", len(features), "longAudio", t.longAudio)
 	}
 
+	initialToken := t.initialToken(language)
+
 	// Decode window by window. Adjacent windows share an overlap, so window i+1's
 	// first few tokens are held and compared against window i's tail before they
 	// are emitted, dropping seam duplicates and letting the earlier (warmed-up)
@@ -621,7 +632,7 @@ func (t *Transcriber) transcribe(ctx context.Context, audioData []byte, format, 
 			}
 		}
 
-		windowTokens, err := t.runInference(ctx, features[win.start:win.end], emitStart, emitEnd, frameOffset, holdFirst, resolveSeam, emit)
+		windowTokens, err := t.runInference(ctx, features[win.start:win.end], emitStart, emitEnd, frameOffset, holdFirst, resolveSeam, emit, initialToken)
 		if err != nil {
 			return "", fmt.Errorf("inference failed: %w", err)
 		}
@@ -692,7 +703,7 @@ func (t *Transcriber) loadAudio(data []byte, format string) ([]float32, error) {
 	return parseWAV(wavData)
 }
 
-func (t *Transcriber) runInference(ctx context.Context, features [][]float32, emitStart, emitEnd, frameOffset int64, holdFirst int, resolveSeam func(head []decodedToken) []decodedToken, emit func(delta string)) ([]decodedToken, error) {
+func (t *Transcriber) runInference(ctx context.Context, features [][]float32, emitStart, emitEnd, frameOffset int64, holdFirst int, resolveSeam func(head []decodedToken) []decodedToken, emit func(delta string), initialToken int) ([]decodedToken, error) {
 	batchSize := int64(1)
 	numFeatures := int64(t.config.FeaturesSize)
 	numFrames := int64(len(features))
@@ -749,7 +760,7 @@ func (t *Transcriber) runInference(ctx context.Context, features [][]float32, em
 
 	// Decoder tensors (encoderOut) must remain alive during tdtDecode.
 	// The defers above fire after tdtDecode returns, so this is safe.
-	return t.tdtDecode(ctx, encoderOut, actualEncodedLen, emitStart, emitEnd, frameOffset, holdFirst, resolveSeam, emit)
+	return t.tdtDecode(ctx, encoderOut, actualEncodedLen, emitStart, emitEnd, frameOffset, holdFirst, resolveSeam, emit, initialToken)
 }
 
 // tdtDecode greedily decodes the encoder output for one window. It decodes the
@@ -764,7 +775,7 @@ func (t *Transcriber) runInference(ctx context.Context, features [][]float32, em
 // emitted; the survivors are streamed in order, then the rest of the window
 // streams as it is decoded. This keeps streaming order correct while buffering
 // only a handful of tokens per seam.
-func (t *Transcriber) tdtDecode(ctx context.Context, encoderOut []float32, encodedLen, emitStart, emitEnd, frameOffset int64, holdFirst int, resolveSeam func(head []decodedToken) []decodedToken, emit func(delta string)) ([]decodedToken, error) {
+func (t *Transcriber) tdtDecode(ctx context.Context, encoderOut []float32, encodedLen, emitStart, emitEnd, frameOffset int64, holdFirst int, resolveSeam func(head []decodedToken) []decodedToken, emit func(delta string), initialToken int) ([]decodedToken, error) {
 	// Acquire a pre-initialized worker. Honor cancellation so a client that
 	// disconnects while all workers are busy does not leak a goroutine.
 	var w *decoderWorker
@@ -799,10 +810,7 @@ func (t *Transcriber) tdtDecode(ctx context.Context, encoderOut []float32, encod
 	resolved := holdFirst <= 0
 	timestep := int64(0)
 	emittedTokens := 0
-	prevToken := t.blankIdx
-	if t.startIdx >= 0 {
-		prevToken = t.startIdx
-	}
+	prevToken := initialToken
 
 	// emitText streams one token's printable text, skipping special <...> tokens.
 	emitText := func(id int) {
@@ -916,6 +924,19 @@ func (t *Transcriber) tdtDecode(ctx context.Context, encoderOut []float32, encod
 	}
 
 	return result, nil
+}
+
+func (t *Transcriber) initialToken(language string) int {
+	lang := strings.TrimSpace(strings.ToLower(language))
+	if lang != "" {
+		if id, ok := t.langTokenID[lang]; ok {
+			return id
+		}
+	}
+	if t.startIdx >= 0 {
+		return t.startIdx
+	}
+	return t.blankIdx
 }
 
 func argmax(data []float32) int {
