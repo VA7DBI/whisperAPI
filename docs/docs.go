@@ -151,6 +151,15 @@ const docTemplate = `{
         "main.HealthResponse": {
             "type": "object",
             "properties": {
+                "parakeet_enabled": {
+                    "type": "boolean"
+                },
+                "parakeet_mode": {
+                    "type": "string"
+                },
+                "parakeet_reason": {
+                    "type": "string"
+                },
                 "status": {
                     "type": "string"
                 }

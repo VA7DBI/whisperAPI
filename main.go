@@ -65,7 +65,7 @@ func main() {
 	r.POST("/transcribe", authMiddleware.Handler(), service.TranscribeHandler)
 
 	// These endpoints remain public
-	r.GET("/health", healthCheck)
+	r.GET("/health", healthCheck(service))
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Add Prometheus metrics endpoint if enabled
@@ -81,7 +81,10 @@ func main() {
 
 // HealthResponse represents the health check response.
 type HealthResponse struct {
-	Status string `json:"status"`
+	Status          string `json:"status"`
+	ParakeetEnabled bool   `json:"parakeet_enabled"`
+	ParakeetMode    string `json:"parakeet_mode,omitempty"`
+	ParakeetReason  string `json:"parakeet_reason,omitempty"`
 }
 
 // healthCheck is the health check endpoint.
@@ -92,8 +95,16 @@ type HealthResponse struct {
 //	@Produce		json
 //	@Success		200	{object}	HealthResponse
 //	@Router			/health [get]
-func healthCheck(c *gin.Context) {
-	c.JSON(200, HealthResponse{Status: "ok"})
+func healthCheck(service *TranscriptionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		parakeetEnabled, parakeetMode, parakeetReason := service.ParakeetHealth()
+		c.JSON(200, HealthResponse{
+			Status:          "ok",
+			ParakeetEnabled: parakeetEnabled,
+			ParakeetMode:    parakeetMode,
+			ParakeetReason:  parakeetReason,
+		})
+	}
 }
 
 func corsMiddleware(cfg *config.Config) gin.HandlerFunc {

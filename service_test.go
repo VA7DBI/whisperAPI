@@ -204,7 +204,11 @@ func testTranscriptionWithExpectedError(t *testing.T, r *gin.Engine, audioPath s
 func TestHealthCheck(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/health", healthCheck)
+	s := &TranscriptionService{
+		parakeetDisabled:      true,
+		parakeetDisableReason: "embedded runtime unavailable",
+	}
+	r.GET("/health", healthCheck(s))
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -212,10 +216,12 @@ func TestHealthCheck(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]string
+	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", response["status"])
+	assert.Equal(t, false, response["parakeet_enabled"])
+	assert.Equal(t, "disabled", response["parakeet_mode"])
 }
 
 func TestSwaggerEndpoint(t *testing.T) {

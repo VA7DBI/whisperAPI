@@ -26,6 +26,12 @@ definitions:
     type: object
   main.HealthResponse:
     properties:
+      parakeet_enabled:
+        type: boolean
+      parakeet_mode:
+        type: string
+      parakeet_reason:
+        type: string
       status:
         type: string
     type: object

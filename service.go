@@ -281,6 +281,26 @@ func (s *TranscriptionService) Close() {
 	s.model.Close()
 }
 
+func (s *TranscriptionService) ParakeetHealth() (enabled bool, mode, reason string) {
+	if s.parakeetDisabled {
+		reason = strings.TrimSpace(s.parakeetDisableReason)
+		if reason == "" {
+			reason = "parakeet engine is disabled"
+		}
+		return false, "disabled", reason
+	}
+
+	if s.parakeetTranscriber != nil {
+		return true, "embedded", ""
+	}
+
+	if strings.TrimSpace(s.config.Parakeet.Endpoint) != "" {
+		return true, "endpoint", ""
+	}
+
+	return false, "disabled", "parakeet is not configured"
+}
+
 // TranscribeHandler handles the transcription request.
 //
 //	@Summary		Transcribe audio to text

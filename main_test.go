@@ -37,7 +37,7 @@ func TestMainSetup(t *testing.T) {
 
 	// Register all routes
 	r.POST("/transcribe", service.TranscribeHandler)
-	r.GET("/health", healthCheck)
+	r.GET("/health", healthCheck(service))
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 

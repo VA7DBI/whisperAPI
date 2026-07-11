@@ -234,7 +234,9 @@ Response:
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "parakeet_enabled": true,
+  "parakeet_mode": "embedded"
 }
 ```
 
