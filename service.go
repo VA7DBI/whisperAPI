@@ -254,16 +254,20 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 		return
 	}
 
-	// Convert the audio file to samples (implementation needed)
-	samples, err := s.convertAudioToSamples(tmpFile.Name())
-	if err != nil {
-		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to convert audio: %v", err)})
-		return
-	}
+	// For Parakeet we forward the original full clip. Whisper still needs PCM samples.
+	duration := audioInfo.Duration
+	var samples []float32
+	if engine == EngineWhisper {
+		samples, err = s.convertAudioToSamples(tmpFile.Name())
+		if err != nil {
+			metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to convert audio: %v", err)})
+			return
+		}
 
-	// Calculate actual duration from samples
-	duration := float64(len(samples)) / float64(s.config.Audio.SampleRate)
+		// Prefer exact sample-derived duration for Whisper pipeline.
+		duration = float64(len(samples)) / float64(s.config.Audio.SampleRate)
+	}
 
 	// Track CPU time using rusage only
 	var rusageStart, rusageEnd syscall.Rusage
@@ -351,6 +355,9 @@ func parseTranscriptionEngine(raw string) (string, error) {
 func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, samples []float32) (string, []SegmentInfo, float64, error) {
 	switch engine {
 	case EngineWhisper:
+		if len(samples) == 0 {
+			return "", nil, 0, fmt.Errorf("no audio samples available for whisper engine")
+		}
 		return s.transcribeWithWhisper(samples)
 	case EngineParakeet:
 		return s.transcribeWithParakeet(audioPath)
@@ -385,8 +392,7 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 		timeout = 30 * time.Second
 	}
 
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Post(s.config.Parakeet.Endpoint, "application/json", bytes.NewReader(payload))
+	resp, err := postParakeetJSON(s.config.Parakeet.Endpoint, payload, timeout)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to call parakeet endpoint: %v", err)
 	}
@@ -416,6 +422,19 @@ func (s *TranscriptionService) transcribeWithParakeet(audioPath string) (string,
 	}
 
 	return parsed.Text, parsed.Segments, confidence, nil
+}
+
+func postParakeetJSON(endpoint string, payload []byte, timeout time.Duration) (*http.Response, error) {
+	client := &http.Client{Timeout: timeout}
+	body := bytes.NewReader(payload)
+	req, err := http.NewRequest(http.MethodPost, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(payload))
+	return client.Do(req)
 }
 
 func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string, []SegmentInfo, float64, error) {
