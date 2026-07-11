@@ -270,6 +270,8 @@ parakeet:
   language: en
 ```
 
+If `parakeet.endpoint` is configured, whisperAPI performs a startup probe and fails fast when the endpoint is unreachable or returns a 5xx response.
+
 When `engine=parakeet` is sent, the API forwards the audio to the configured Parakeet endpoint as JSON:
 
 ```json

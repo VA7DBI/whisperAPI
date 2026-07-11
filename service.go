@@ -124,10 +124,54 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 		return nil, fmt.Errorf("failed to load whisper model: %v", err)
 	}
 
+	if err := validateConfiguredParakeetEndpoint(cfg); err != nil {
+		model.Close()
+		return nil, err
+	}
+
 	return &TranscriptionService{
 		model:  model,
 		config: cfg,
 	}, nil
+}
+
+func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
+	endpoint := strings.TrimSpace(cfg.Parakeet.Endpoint)
+	if endpoint == "" {
+		return nil
+	}
+
+	timeout := time.Duration(cfg.Parakeet.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	if err := probeParakeetEndpoint(endpoint, timeout); err != nil {
+		return fmt.Errorf("parakeet endpoint startup probe failed for %s: %v", endpoint, err)
+	}
+
+	return nil
+}
+
+func probeParakeetEndpoint(endpoint string, timeout time.Duration) error {
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest(http.MethodOptions, endpoint, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Any non-5xx HTTP response confirms the endpoint is reachable at startup.
+	if resp.StatusCode >= http.StatusInternalServerError {
+		return fmt.Errorf("received HTTP %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // Close closes the transcription service.
