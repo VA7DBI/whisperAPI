@@ -265,13 +265,23 @@ Parakeet engine configuration (optional):
 
 ```yaml
 parakeet:
-  endpoint: "http://localhost:5092"  # or full path: http://localhost:5092/v1/audio/transcriptions
+  endpoint: ""  # Leave empty to use embedded managed mode below
   timeout_seconds: 30
   language: en
   model: parakeet-tdt-0.6b
+  embedded:
+    enabled: true
+    binary_path: parakeet
+    models_dir: models
+    port: 5092
+    workers: 2
 ```
 
-If `parakeet.endpoint` is configured, whisperAPI performs a startup probe and fails fast when the endpoint is unreachable or returns a 5xx response.
+Embedded mode behavior:
+
+- If `parakeet.endpoint` is empty and `parakeet.embedded.enabled` is true, whisperAPI starts a managed local Parakeet worker process automatically at startup.
+- If `parakeet.endpoint` is set, whisperAPI uses that endpoint directly.
+- In both cases, whisperAPI probes the resolved endpoint at startup and fails fast if unreachable.
 
 When `engine=parakeet` is sent, whisperAPI forwards the full audio clip using `multipart/form-data` to the Parakeet OpenAI-compatible transcription endpoint.
 

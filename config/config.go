@@ -31,6 +31,13 @@ type Config struct {
 		TimeoutSeconds int    `yaml:"timeout_seconds"`
 		Language       string `yaml:"language"`
 		Model          string `yaml:"model"`
+		Embedded       struct {
+			Enabled    bool   `yaml:"enabled"`
+			BinaryPath string `yaml:"binary_path"`
+			ModelsDir  string `yaml:"models_dir"`
+			Port       int    `yaml:"port"`
+			Workers    int    `yaml:"workers"`
+		} `yaml:"embedded"`
 	} `yaml:"parakeet"`
 
 	Audio struct {
@@ -112,6 +119,18 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if config.Parakeet.Model == "" {
 		config.Parakeet.Model = "parakeet-tdt-0.6b"
+	}
+	if config.Parakeet.Embedded.BinaryPath == "" {
+		config.Parakeet.Embedded.BinaryPath = "parakeet"
+	}
+	if config.Parakeet.Embedded.ModelsDir == "" {
+		config.Parakeet.Embedded.ModelsDir = "models"
+	}
+	if config.Parakeet.Embedded.Port == 0 {
+		config.Parakeet.Embedded.Port = 5092
+	}
+	if config.Parakeet.Embedded.Workers == 0 {
+		config.Parakeet.Embedded.Workers = 2
 	}
 	if len(config.CORS.AllowedMethods) == 0 {
 		config.CORS.AllowedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}

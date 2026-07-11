@@ -8,14 +8,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"syscall"
@@ -48,8 +52,10 @@ var (
 
 // TranscriptionService encapsulates the whisper model and configuration.
 type TranscriptionService struct {
-	model  whisper.Model
-	config *config.Config
+	model               whisper.Model
+	config              *config.Config
+	parakeetProcess     *exec.Cmd
+	parakeetProcessLock sync.Mutex
 }
 
 // TokenInfo represents token information.
@@ -125,15 +131,72 @@ func NewTranscriptionService(cfg *config.Config) (*TranscriptionService, error) 
 		return nil, fmt.Errorf("failed to load whisper model: %v", err)
 	}
 
+	process, err := startEmbeddedParakeetIfEnabled(cfg)
+	if err != nil {
+		model.Close()
+		return nil, err
+	}
+
 	if err := validateConfiguredParakeetEndpoint(cfg); err != nil {
+		if process != nil {
+			_ = process.Process.Kill()
+			_, _ = process.Process.Wait()
+		}
 		model.Close()
 		return nil, err
 	}
 
 	return &TranscriptionService{
-		model:  model,
-		config: cfg,
+		model:           model,
+		config:          cfg,
+		parakeetProcess: process,
 	}, nil
+}
+
+func startEmbeddedParakeetIfEnabled(cfg *config.Config) (*exec.Cmd, error) {
+	if strings.TrimSpace(cfg.Parakeet.Endpoint) != "" {
+		return nil, nil
+	}
+
+	if !cfg.Parakeet.Embedded.Enabled {
+		return nil, nil
+	}
+
+	binaryPath := strings.TrimSpace(cfg.Parakeet.Embedded.BinaryPath)
+	if binaryPath == "" {
+		binaryPath = "parakeet"
+	}
+
+	modelsDir := strings.TrimSpace(cfg.Parakeet.Embedded.ModelsDir)
+	if modelsDir == "" {
+		modelsDir = "models"
+	}
+
+	port := cfg.Parakeet.Embedded.Port
+	if port <= 0 {
+		port = 5092
+	}
+
+	workers := cfg.Parakeet.Embedded.Workers
+	if workers <= 0 {
+		workers = 2
+	}
+
+	cmd := exec.Command(binaryPath,
+		"-port", strconv.Itoa(port),
+		"-models", modelsDir,
+		"-workers", strconv.Itoa(workers),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start embedded parakeet process: %v", err)
+	}
+
+	cfg.Parakeet.Endpoint = fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	return cmd, nil
 }
 
 func validateConfiguredParakeetEndpoint(cfg *config.Config) error {
@@ -207,6 +270,16 @@ func resolveParakeetTranscriptionEndpoint(endpoint string) (string, error) {
 // Close closes the transcription service.
 func (s *TranscriptionService) Close() {
 	s.model.Close()
+
+	s.parakeetProcessLock.Lock()
+	defer s.parakeetProcessLock.Unlock()
+
+	if s.parakeetProcess != nil && s.parakeetProcess.Process != nil {
+		if err := s.parakeetProcess.Process.Kill(); err != nil {
+			log.Printf("failed to stop embedded parakeet process: %v", err)
+		}
+		_, _ = s.parakeetProcess.Process.Wait()
+	}
 }
 
 // TranscribeHandler handles the transcription request.

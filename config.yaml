@@ -15,6 +15,12 @@ parakeet:
   timeout_seconds: 30
   language: en
   model: parakeet-tdt-0.6b
+  embedded:
+    enabled: true
+    binary_path: parakeet
+    models_dir: models
+    port: 5092
+    workers: 2
 
 audio:
   sample_rate: 16000
