@@ -153,6 +153,8 @@ func testTranscription(t *testing.T, r *gin.Engine, audioPath string) {
 	// Detailed assertions for the response
 	t.Logf("Transcribed Text: %q", response.Text)
 	assert.NotEmpty(t, response.Text, "Transcription text should not be empty")
+	assert.Equal(t, "models/ggml-base.bin", response.Model)
+	assert.Equal(t, "models/ggml-base.bin", response.Model)
 
 	// Performance metrics logging
 	t.Logf("Processing Time: %.2f seconds", response.ProcessingTime)

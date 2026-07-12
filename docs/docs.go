@@ -259,6 +259,9 @@ const docTemplate = `{
                 "engine": {
                     "type": "string"
                 },
+                "model": {
+                    "type": "string"
+                },
                 "memory_usage": {
                     "$ref": "#/definitions/main.MemStats"
                 },

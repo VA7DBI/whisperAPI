@@ -313,6 +313,7 @@ Response:
 {
   "text": "Transcribed text content",
   "engine": "whisper",
+  "model": "models/ggml-base.bin",
   "audio_info": {
     "format": "WAV",
     "codec": "PCM",
@@ -328,8 +329,6 @@ Response:
     "gpu_time_seconds": null
   },
   "timestamp": "2024-02-14T12:34:56Z"
-  ,
-  ...
 }
 ```
 

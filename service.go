@@ -81,6 +81,7 @@ type SegmentInfo struct {
 type TranscriptionResponse struct {
 	Text           string              `json:"text"`
 	Engine         string              `json:"engine"`
+	Model          string              `json:"model"`
 	Segments       []SegmentInfo       `json:"segments"`
 	Duration       float64             `json:"duration_seconds"`
 	ProcessingTime float64             `json:"processing_time_seconds"`
@@ -463,6 +464,7 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	response := TranscriptionResponse{
 		Text:           text,
 		Engine:         engine,
+		Model:          s.modelNameForEngine(engine),
 		Segments:       segments,
 		Duration:       duration,
 		ProcessingTime: time.Since(startTime).Seconds(),
@@ -499,6 +501,20 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	metrics.TranscriptionRequests.WithLabelValues("success", format).Inc()
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (s *TranscriptionService) modelNameForEngine(engine string) string {
+	switch engine {
+	case EngineWhisper:
+		return s.config.Whisper.ModelPath
+	case EngineParakeet:
+		if model := strings.TrimSpace(s.config.Parakeet.Model); model != "" {
+			return model
+		}
+		return "parakeet-tdt-0.6b"
+	default:
+		return ""
+	}
 }
 
 func parseTranscriptionEngine(raw string) (string, error) {
