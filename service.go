@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,9 +74,34 @@ type TokenInfo struct {
 // SegmentInfo represents segment information.
 type SegmentInfo struct {
 	Text      string      `json:"text"`
+	Speaker   string      `json:"speaker,omitempty"`
 	Tokens    []TokenInfo `json:"tokens"`
 	StartTime float64     `json:"start_time"`
 	EndTime   float64     `json:"end_time"`
+}
+
+type DiarizationSpeaker struct {
+	ID            string  `json:"id"`
+	Duration      float64 `json:"duration_seconds"`
+	SegmentCount  int     `json:"segment_count"`
+	AverageEnergy float64 `json:"average_energy"`
+}
+
+type DiarizationResult struct {
+	Enabled      bool                 `json:"enabled"`
+	Method       string               `json:"method"`
+	SpeakerCount int                  `json:"speaker_count"`
+	Speakers     []DiarizationSpeaker `json:"speakers"`
+}
+
+type DiarizationOptions struct {
+	Enabled          bool
+	ExpectedSpeakers int
+}
+
+type diarizationSegmentFeatures struct {
+	rms float64
+	zcr float64
 }
 
 // TranscriptionResponse represents the transcription response.
@@ -82,6 +109,7 @@ type TranscriptionResponse struct {
 	Text           string              `json:"text"`
 	Engine         string              `json:"engine"`
 	Model          string              `json:"model"`
+	Diarization    *DiarizationResult  `json:"diarization,omitempty"`
 	Segments       []SegmentInfo       `json:"segments"`
 	Duration       float64             `json:"duration_seconds"`
 	ProcessingTime float64             `json:"processing_time_seconds"`
@@ -313,6 +341,8 @@ func (s *TranscriptionService) ParakeetHealth() (enabled bool, mode, reason stri
 //	@Produce		json
 //	@Param			audio	formData	file					true	"Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC, or Speex format)"
 //	@Param			engine	formData	string				false	"Speech-to-text engine to use: whisper (default) or parakeet" Enums(whisper,parakeet) default(whisper)
+//	@Param			diarize	formData	boolean				false	"Enable basic speaker diarization (currently whisper engine only)" default(false)
+//	@Param			expected_speakers	formData	integer	false	"Optional speaker hint for diarization (2-8)"
 //	@Success		200		{object}	TranscriptionResponse	"Successful transcription with metadata"
 //	@Failure		400		{object}	ErrorResponse			"Invalid request (missing file, file too large)"
 //	@Failure		401		{object}	ErrorResponse			"Unauthorized (invalid or missing API key)"
@@ -432,7 +462,41 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 	var rusageStart, rusageEnd syscall.Rusage
 	syscall.Getrusage(syscall.RUSAGE_SELF, &rusageStart)
 
-	text, segments, confidence, err := s.transcribeWithEngine(engine, tmpPath, samples)
+	diarizeRaw := strings.TrimSpace(strings.ToLower(c.PostForm("diarize")))
+	diarizeEnabled, err := strconv.ParseBool(diarizeRaw)
+	if diarizeRaw == "" {
+		diarizeEnabled = false
+		err = nil
+	}
+	if err != nil {
+		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid diarize value, expected true or false"})
+		return
+	}
+
+	if diarizeEnabled && engine != EngineWhisper {
+		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "diarization is currently supported only with engine=whisper"})
+		return
+	}
+
+	diarizationOptions := DiarizationOptions{Enabled: diarizeEnabled, ExpectedSpeakers: 0}
+	if rawExpected := strings.TrimSpace(c.PostForm("expected_speakers")); rawExpected != "" {
+		expected, parseErr := strconv.Atoi(rawExpected)
+		if parseErr != nil {
+			metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid expected_speakers value, expected integer in range 2-8"})
+			return
+		}
+		if expected < 2 || expected > 8 {
+			metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "expected_speakers must be between 2 and 8"})
+			return
+		}
+		diarizationOptions.ExpectedSpeakers = expected
+	}
+
+	text, segments, confidence, diarization, err := s.transcribeWithEngine(engine, tmpPath, samples, diarizationOptions)
 	if err != nil {
 		metrics.TranscriptionRequests.WithLabelValues("error", format).Inc()
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to process audio with %s: %v", engine, err)})
@@ -465,6 +529,7 @@ func (s *TranscriptionService) TranscribeHandler(c *gin.Context) {
 		Text:           text,
 		Engine:         engine,
 		Model:          s.modelNameForEngine(engine),
+		Diarization:    diarization,
 		Segments:       segments,
 		Duration:       duration,
 		ProcessingTime: time.Since(startTime).Seconds(),
@@ -530,24 +595,25 @@ func parseTranscriptionEngine(raw string) (string, error) {
 	return engine, nil
 }
 
-func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, samples []float32) (string, []SegmentInfo, float64, error) {
+func (s *TranscriptionService) transcribeWithEngine(engine, audioPath string, samples []float32, diarizationOptions DiarizationOptions) (string, []SegmentInfo, float64, *DiarizationResult, error) {
 	switch engine {
 	case EngineWhisper:
 		if len(samples) == 0 {
-			return "", nil, 0, fmt.Errorf("no audio samples available for whisper engine")
+			return "", nil, 0, nil, fmt.Errorf("no audio samples available for whisper engine")
 		}
-		return s.transcribeWithWhisper(samples)
+		return s.transcribeWithWhisper(samples, diarizationOptions)
 	case EngineParakeet:
 		if s.parakeetDisabled {
 			reason := strings.TrimSpace(s.parakeetDisableReason)
 			if reason == "" {
 				reason = "parakeet is not available"
 			}
-			return "", nil, 0, fmt.Errorf("parakeet engine is disabled: %s", reason)
+			return "", nil, 0, nil, fmt.Errorf("parakeet engine is disabled: %s", reason)
 		}
-		return s.transcribeWithParakeet(audioPath)
+		text, segments, confidence, err := s.transcribeWithParakeet(audioPath)
+		return text, segments, confidence, nil, err
 	default:
-		return "", nil, 0, fmt.Errorf("unsupported engine: %s", engine)
+		return "", nil, 0, nil, fmt.Errorf("unsupported engine: %s", engine)
 	}
 }
 
@@ -678,7 +744,7 @@ func postParakeetMultipart(endpoint, contentType string, payload []byte, timeout
 	return client.Do(req)
 }
 
-func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string, []SegmentInfo, float64, error) {
+func (s *TranscriptionService) transcribeWithWhisper(samples []float32, diarizationOptions DiarizationOptions) (string, []SegmentInfo, float64, *DiarizationResult, error) {
 	// whisper.cpp context/state scheduling is not safe under concurrent calls
 	// with the current binding usage, so serialize Whisper requests.
 	s.whisperMu.Lock()
@@ -686,13 +752,13 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 
 	context, err := s.model.NewContext()
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to create whisper context: %v", err)
+		return "", nil, 0, nil, fmt.Errorf("failed to create whisper context: %v", err)
 	}
 
 	language := strings.TrimSpace(s.config.Whisper.Language)
 	if language != "" {
 		if err := context.SetLanguage(language); err != nil {
-			return "", nil, 0, fmt.Errorf("failed to set whisper language %q: %v", language, err)
+			return "", nil, 0, nil, fmt.Errorf("failed to set whisper language %q: %v", language, err)
 		}
 	}
 
@@ -702,7 +768,7 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 	segments := make([]SegmentInfo, 0)
 
 	if err := context.Process(samples, nil, nil); err != nil {
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	for {
@@ -711,7 +777,7 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 			break
 		}
 		if err != nil {
-			return "", nil, 0, err
+			return "", nil, 0, nil, err
 		}
 
 		text += seg.Text
@@ -744,7 +810,241 @@ func (s *TranscriptionService) transcribeWithWhisper(samples []float32) (string,
 		confidence = totalProb / float64(tokenCount)
 	}
 
-	return text, segments, confidence, nil
+	diarizationResult, segments := diarizeWhisperSegments(samples, segments, s.config.Audio.SampleRate, diarizationOptions)
+
+	return text, segments, confidence, diarizationResult, nil
+}
+
+func diarizeWhisperSegments(samples []float32, segments []SegmentInfo, sampleRate int, options DiarizationOptions) (*DiarizationResult, []SegmentInfo) {
+	if !options.Enabled || len(segments) == 0 || len(samples) == 0 || sampleRate <= 0 {
+		return nil, segments
+	}
+
+	features := make([]diarizationSegmentFeatures, len(segments))
+	validCount := 0
+	for i, seg := range segments {
+		start := int(seg.StartTime * float64(sampleRate))
+		end := int(seg.EndTime * float64(sampleRate))
+		if start < 0 {
+			start = 0
+		}
+		if end > len(samples) {
+			end = len(samples)
+		}
+		if end <= start {
+			continue
+		}
+
+		rms, zcr := segmentAcousticFeatures(samples[start:end])
+		features[i] = diarizationSegmentFeatures{rms: rms, zcr: zcr}
+		validCount++
+	}
+
+	if validCount == 0 {
+		return &DiarizationResult{Enabled: true, Method: "acoustic-kmeans", SpeakerCount: 1, Speakers: []DiarizationSpeaker{{ID: "SPEAKER_00", Duration: totalSegmentDuration(segments), SegmentCount: len(segments), AverageEnergy: 0}}}, assignSingleSpeaker(segments, "SPEAKER_00")
+	}
+
+	k := options.ExpectedSpeakers
+	if k < 2 || k > 8 {
+		if len(segments) < 4 {
+			k = 1
+		} else {
+			k = 2
+		}
+	}
+	if k > len(segments) {
+		k = len(segments)
+	}
+	if k <= 1 {
+		speakerID := "SPEAKER_00"
+		for i := range segments {
+			segments[i].Speaker = speakerID
+		}
+		return &DiarizationResult{Enabled: true, Method: "acoustic-kmeans", SpeakerCount: 1, Speakers: []DiarizationSpeaker{{ID: speakerID, Duration: totalSegmentDuration(segments), SegmentCount: len(segments), AverageEnergy: averageRMS(features)}}}, segments
+	}
+
+	points := make([][2]float64, len(segments))
+	for i := range segments {
+		points[i] = [2]float64{features[i].rms, features[i].zcr}
+	}
+
+	labels, centroids := kmeans2D(points, k, 16)
+	if len(labels) != len(segments) {
+		return &DiarizationResult{Enabled: true, Method: "acoustic-kmeans", SpeakerCount: 1, Speakers: []DiarizationSpeaker{{ID: "SPEAKER_00", Duration: totalSegmentDuration(segments), SegmentCount: len(segments), AverageEnergy: averageRMS(features)}}}, assignSingleSpeaker(segments, "SPEAKER_00")
+	}
+
+	clusterOrder := make([]int, 0, len(centroids))
+	for idx := range centroids {
+		clusterOrder = append(clusterOrder, idx)
+	}
+	sortClustersByEnergy(clusterOrder, centroids)
+
+	clusterToSpeaker := make(map[int]string, len(clusterOrder))
+	for i, clusterID := range clusterOrder {
+		clusterToSpeaker[clusterID] = fmt.Sprintf("SPEAKER_%02d", i)
+	}
+
+	speakerStats := map[string]*DiarizationSpeaker{}
+	for i := range segments {
+		speakerID := clusterToSpeaker[labels[i]]
+		segments[i].Speaker = speakerID
+
+		dur := segments[i].EndTime - segments[i].StartTime
+		if dur < 0 {
+			dur = 0
+		}
+		if _, ok := speakerStats[speakerID]; !ok {
+			speakerStats[speakerID] = &DiarizationSpeaker{ID: speakerID}
+		}
+		st := speakerStats[speakerID]
+		st.Duration += dur
+		st.SegmentCount++
+		st.AverageEnergy += features[i].rms
+	}
+
+	resultSpeakers := make([]DiarizationSpeaker, 0, len(speakerStats))
+	for _, clusterID := range clusterOrder {
+		speakerID := clusterToSpeaker[clusterID]
+		if st, ok := speakerStats[speakerID]; ok {
+			if st.SegmentCount > 0 {
+				st.AverageEnergy /= float64(st.SegmentCount)
+			}
+			resultSpeakers = append(resultSpeakers, *st)
+		}
+	}
+
+	return &DiarizationResult{
+		Enabled:      true,
+		Method:       "acoustic-kmeans",
+		SpeakerCount: len(resultSpeakers),
+		Speakers:     resultSpeakers,
+	}, segments
+}
+
+func segmentAcousticFeatures(samples []float32) (float64, float64) {
+	if len(samples) == 0 {
+		return 0, 0
+	}
+
+	var sqSum float64
+	zeroCrossings := 0
+	prev := samples[0]
+	for _, s := range samples {
+		v := float64(s)
+		sqSum += v * v
+		if (prev < 0 && s >= 0) || (prev >= 0 && s < 0) {
+			zeroCrossings++
+		}
+		prev = s
+	}
+
+	rms := math.Sqrt(sqSum / float64(len(samples)))
+	zcr := float64(zeroCrossings) / float64(len(samples))
+	return rms, zcr
+}
+
+func kmeans2D(points [][2]float64, k, maxIterations int) ([]int, [][2]float64) {
+	if len(points) == 0 || k <= 0 {
+		return nil, nil
+	}
+	if k > len(points) {
+		k = len(points)
+	}
+
+	centroids := make([][2]float64, k)
+	for i := 0; i < k; i++ {
+		centroids[i] = points[(i*len(points))/k]
+	}
+
+	labels := make([]int, len(points))
+	for iter := 0; iter < maxIterations; iter++ {
+		changed := false
+		for i, point := range points {
+			bestCluster := 0
+			bestDistance := distance2D(point, centroids[0])
+			for c := 1; c < k; c++ {
+				d := distance2D(point, centroids[c])
+				if d < bestDistance {
+					bestDistance = d
+					bestCluster = c
+				}
+			}
+			if labels[i] != bestCluster {
+				labels[i] = bestCluster
+				changed = true
+			}
+		}
+
+		newCentroids := make([][2]float64, k)
+		counts := make([]int, k)
+		for i, point := range points {
+			cluster := labels[i]
+			newCentroids[cluster][0] += point[0]
+			newCentroids[cluster][1] += point[1]
+			counts[cluster]++
+		}
+
+		for c := 0; c < k; c++ {
+			if counts[c] == 0 {
+				newCentroids[c] = centroids[c]
+				continue
+			}
+			newCentroids[c][0] /= float64(counts[c])
+			newCentroids[c][1] /= float64(counts[c])
+		}
+
+		centroids = newCentroids
+		if !changed {
+			break
+		}
+	}
+
+	return labels, centroids
+}
+
+func distance2D(a, b [2]float64) float64 {
+	d0 := a[0] - b[0]
+	d1 := a[1] - b[1]
+	return d0*d0 + d1*d1
+}
+
+func sortClustersByEnergy(order []int, centroids [][2]float64) {
+	for i := 0; i < len(order)-1; i++ {
+		for j := i + 1; j < len(order); j++ {
+			if centroids[order[i]][0] > centroids[order[j]][0] {
+				order[i], order[j] = order[j], order[i]
+			}
+		}
+	}
+}
+
+func assignSingleSpeaker(segments []SegmentInfo, speaker string) []SegmentInfo {
+	for i := range segments {
+		segments[i].Speaker = speaker
+	}
+	return segments
+}
+
+func totalSegmentDuration(segments []SegmentInfo) float64 {
+	total := 0.0
+	for _, seg := range segments {
+		dur := seg.EndTime - seg.StartTime
+		if dur > 0 {
+			total += dur
+		}
+	}
+	return total
+}
+
+func averageRMS(features []diarizationSegmentFeatures) float64 {
+	if len(features) == 0 {
+		return 0
+	}
+	total := 0.0
+	for _, f := range features {
+		total += f.rms
+	}
+	return total / float64(len(features))
 }
 
 // handleError adds error metrics in error handlers.

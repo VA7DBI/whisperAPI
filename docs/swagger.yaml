@@ -19,6 +19,30 @@ definitions:
       sample_rate:
         type: integer
     type: object
+  main.DiarizationResult:
+    properties:
+      enabled:
+        type: boolean
+      method:
+        type: string
+      speaker_count:
+        type: integer
+      speakers:
+        items:
+          $ref: '#/definitions/main.DiarizationSpeaker'
+        type: array
+    type: object
+  main.DiarizationSpeaker:
+    properties:
+      average_energy:
+        type: number
+      duration_seconds:
+        type: number
+      id:
+        type: string
+      segment_count:
+        type: integer
+    type: object
   main.ErrorResponse:
     properties:
       error:
@@ -56,6 +80,8 @@ definitions:
     properties:
       end_time:
         type: number
+      speaker:
+        type: string
       start_time:
         type: number
       text:
@@ -82,6 +108,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/audio.AudioMetadata'
         description: Updated to use audio package type
+      diarization:
+        $ref: '#/definitions/main.DiarizationResult'
       compute_time:
         properties:
           cpu_time_seconds:
@@ -144,7 +172,8 @@ paths:
       - multipart/form-data
       description: Converts audio file to text. Use engine=whisper (default) for
         local whisper.cpp processing, or engine=parakeet to forward the file to
-        a Parakeet OpenAI-compatible endpoint.
+        a Parakeet OpenAI-compatible endpoint. Set diarize=true to add speaker
+        labels on Whisper segments.
       parameters:
       - description: Audio file to transcribe (WAV, MP3, OGG Vorbis, Opus, FLAC, AAC,
           or Speex format)
@@ -160,6 +189,15 @@ paths:
         in: formData
         name: engine
         type: string
+      - default: false
+        description: Enable basic speaker diarization (currently whisper engine only)
+        in: formData
+        name: diarize
+        type: boolean
+      - description: Optional speaker hint for diarization (2-8)
+        in: formData
+        name: expected_speakers
+        type: integer
       produces:
       - application/json
       responses:

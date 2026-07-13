@@ -50,7 +50,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Converts audio file to text. Use engine=whisper (default) for local whisper.cpp processing, or engine=parakeet to forward the file to a Parakeet OpenAI-compatible endpoint.",
+                "description": "Converts audio file to text. Use engine=whisper (default) for local whisper.cpp processing, or engine=parakeet to forward the file to a Parakeet OpenAI-compatible endpoint. Set diarize=true to add speaker labels on Whisper segments.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -78,6 +78,19 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Speech-to-text engine to use: whisper (default) or parakeet",
                         "name": "engine",
+                        "in": "formData"
+                    },
+                    {
+                        "default": false,
+                        "type": "boolean",
+                        "description": "Enable basic speaker diarization (currently whisper engine only)",
+                        "name": "diarize",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Optional speaker hint for diarization (2-8)",
+                        "name": "expected_speakers",
                         "in": "formData"
                     }
                 ],
@@ -140,6 +153,43 @@ const docTemplate = `{
                 }
             }
         },
+        "main.DiarizationResult": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "speaker_count": {
+                    "type": "integer"
+                },
+                "speakers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.DiarizationSpeaker"
+                    }
+                }
+            }
+        },
+        "main.DiarizationSpeaker": {
+            "type": "object",
+            "properties": {
+                "average_energy": {
+                    "type": "number"
+                },
+                "duration_seconds": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "segment_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "main.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -197,6 +247,9 @@ const docTemplate = `{
                 "end_time": {
                     "type": "number"
                 },
+                "speaker": {
+                    "type": "string"
+                },
                 "start_time": {
                     "type": "number"
                 },
@@ -238,6 +291,9 @@ const docTemplate = `{
                             "$ref": "#/definitions/audio.AudioMetadata"
                         }
                     ]
+                },
+                "diarization": {
+                    "$ref": "#/definitions/main.DiarizationResult"
                 },
                 "compute_time": {
                     "type": "object",

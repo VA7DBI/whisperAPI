@@ -260,6 +260,8 @@ Request:
 - Content-Type: multipart/form-data
 - Form field: "audio" (file)
 - Optional form field: "engine" (string, defaults to "whisper")
+- Optional form field: "diarize" (boolean, defaults to false; supported for `engine=whisper`)
+- Optional form field: "expected_speakers" (integer, 2-8, requires `diarize=true`)
 - Supported formats: WAV, OGG/Vorbis, OGG/Opus
 - Supported engines: whisper, parakeet
 
@@ -314,6 +316,34 @@ Response:
   "text": "Transcribed text content",
   "engine": "whisper",
   "model": "models/ggml-base.bin",
+  "diarization": {
+    "enabled": true,
+    "method": "acoustic-kmeans",
+    "speaker_count": 2,
+    "speakers": [
+      {
+        "id": "SPEAKER_00",
+        "duration_seconds": 5.1,
+        "segment_count": 4,
+        "average_energy": 0.032
+      },
+      {
+        "id": "SPEAKER_01",
+        "duration_seconds": 4.8,
+        "segment_count": 3,
+        "average_energy": 0.041
+      }
+    ]
+  },
+  "segments": [
+    {
+      "text": "Hello there",
+      "speaker": "SPEAKER_00",
+      "start_time": 0.4,
+      "end_time": 1.2,
+      "tokens": []
+    }
+  ],
   "audio_info": {
     "format": "WAV",
     "codec": "PCM",

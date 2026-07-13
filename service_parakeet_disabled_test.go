@@ -15,10 +15,11 @@ func TestTranscribeWithEngine_ParakeetDisabled(t *testing.T) {
 		parakeetDisableReason: "no parakeet binary found",
 	}
 
-	text, segments, confidence, err := s.transcribeWithEngine(EngineParakeet, "audio.wav", nil)
+	text, segments, confidence, diarization, err := s.transcribeWithEngine(EngineParakeet, "audio.wav", nil, DiarizationOptions{})
 	assert.Error(t, err)
 	assert.Empty(t, text)
 	assert.Empty(t, segments)
 	assert.Equal(t, float64(0), confidence)
+	assert.Nil(t, diarization)
 	assert.Contains(t, err.Error(), "parakeet engine is disabled")
 }
